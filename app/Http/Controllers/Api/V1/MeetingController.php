@@ -113,7 +113,7 @@ class MeetingController extends Controller
             ->orWhere('room_name', $meetingCode)
             ->first();
 
-        if (!$meeting) {
+        if (! $meeting) {
             return $this->errorResponse('Meeting not found', 404);
         }
 
@@ -154,11 +154,11 @@ class MeetingController extends Controller
             ->orWhere('room_name', $validated['meeting_code'])
             ->first();
 
-        if (!$meeting) {
+        if (! $meeting) {
             return $this->errorResponse('Meeting not found', 404);
         }
 
-        if (!$meeting->is_active) {
+        if (! $meeting->is_active) {
             return $this->errorResponse('This meeting has already ended', 422, [
                 'is_active' => false,
             ]);
@@ -177,7 +177,7 @@ class MeetingController extends Controller
                 ]);
             }
 
-            if (!$meeting->verifyPasscode($validated['passcode'])) {
+            if (! $meeting->verifyPasscode($validated['passcode'])) {
                 return $this->errorResponse('Invalid meeting passcode', 422, [
                     'invalid_passcode' => true,
                 ]);
@@ -210,25 +210,25 @@ class MeetingController extends Controller
             ->orWhere('room_name', $meetingCode)
             ->first();
 
-        if (!$meeting) {
+        if (! $meeting) {
             return $this->errorResponse('Meeting not found', 404);
         }
 
-        if (!$meeting->is_active) {
+        if (! $meeting->is_active) {
             return $this->errorResponse('This meeting has ended', 422);
         }
 
         $user = $request->user();
         $isHost = ($user->id === $meeting->host_id);
 
-        if (!$isHost && $meeting->is_locked) {
+        if (! $isHost && $meeting->is_locked) {
             return $this->errorResponse('This meeting has been locked by the host', 403);
         }
 
         // Passcode verification for non-hosts
-        if (!$isHost && $meeting->hasPasscode()) {
+        if (! $isHost && $meeting->hasPasscode()) {
             $passcode = $request->validated('passcode');
-            if (empty($passcode) || !$meeting->verifyPasscode($passcode)) {
+            if (empty($passcode) || ! $meeting->verifyPasscode($passcode)) {
                 return $this->errorResponse('Invalid or missing meeting passcode', 403);
             }
         }
@@ -239,14 +239,14 @@ class MeetingController extends Controller
             ->whereNull('left_at')
             ->first();
 
-        if (!$existingActive && $meeting->activeParticipants()->count() >= $meeting->max_participants) {
+        if (! $existingActive && $meeting->activeParticipants()->count() >= $meeting->max_participants) {
             return $this->errorResponse('Meeting has reached maximum participant limit', 422);
         }
 
         $role = $isHost ? 'host' : 'participant';
 
         // Record participant entry if not already logged
-        if (!$existingActive) {
+        if (! $existingActive) {
             MeetingParticipant::create([
                 'meeting_id' => $meeting->id,
                 'user_id' => $user->id,
@@ -286,7 +286,7 @@ class MeetingController extends Controller
             ->orWhere('room_name', $meetingCode)
             ->first();
 
-        if (!$meeting) {
+        if (! $meeting) {
             return $this->errorResponse('Meeting not found', 404);
         }
 
@@ -321,7 +321,7 @@ class MeetingController extends Controller
             ->orWhere('room_name', $meetingCode)
             ->first();
 
-        if (!$meeting) {
+        if (! $meeting) {
             return $this->errorResponse('Meeting not found', 404);
         }
 

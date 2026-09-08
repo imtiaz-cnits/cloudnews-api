@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class MeetingParticipant extends Model
 {
-    /** @use HasFactory<\Database\Factories\MeetingParticipantFactory> */
+    /** @use HasFactory<MeetingParticipantFactory> */
     /** @use HasFactory<MeetingParticipantFactory> */
     use HasFactory;
 

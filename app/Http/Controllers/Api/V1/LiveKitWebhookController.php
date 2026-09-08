@@ -30,10 +30,12 @@ class LiveKitWebhookController extends Controller
         try {
             $eventData = $this->liveKitService->verifyWebhook($rawBody, $authHeader);
         } catch (InvalidArgumentException $e) {
-            Log::warning('LiveKit Webhook Verification Failed: ' . $e->getMessage());
+            Log::warning('LiveKit Webhook Verification Failed: '.$e->getMessage());
+
             return $this->errorResponse($e->getMessage(), 401);
         } catch (Throwable $e) {
-            Log::error('LiveKit Webhook Processing Exception: ' . $e->getMessage());
+            Log::error('LiveKit Webhook Processing Exception: '.$e->getMessage());
+
             return $this->errorResponse('Webhook processing failed', 400);
         }
 
@@ -45,14 +47,15 @@ class LiveKitWebhookController extends Controller
 
         Log::info("LiveKit Webhook received: [{$event}] for room [{$roomName}]");
 
-        if (!$roomName) {
+        if (! $roomName) {
             return $this->successResponse(null, 'Webhook received without room data');
         }
 
         $meeting = Meeting::where('room_name', $roomName)->first();
 
-        if (!$meeting) {
+        if (! $meeting) {
             Log::warning("LiveKit Webhook: Meeting with room_name {$roomName} not found in database.");
+
             return $this->successResponse(null, 'Meeting not found');
         }
 
@@ -88,7 +91,7 @@ class LiveKitWebhookController extends Controller
     {
         $user = $this->resolveUserFromIdentity($identity);
 
-        if (!$user) {
+        if (! $user) {
             return;
         }
 
@@ -97,7 +100,7 @@ class LiveKitWebhookController extends Controller
             ->whereNull('left_at')
             ->exists();
 
-        if (!$alreadyActive) {
+        if (! $alreadyActive) {
             $role = ($user->id === $meeting->host_id) ? 'host' : 'participant';
 
             MeetingParticipant::create([
@@ -116,7 +119,7 @@ class LiveKitWebhookController extends Controller
     {
         $user = $this->resolveUserFromIdentity($identity);
 
-        if (!$user) {
+        if (! $user) {
             return;
         }
 
@@ -131,7 +134,7 @@ class LiveKitWebhookController extends Controller
      */
     protected function resolveUserFromIdentity(?string $identity): ?User
     {
-        if (!$identity) {
+        if (! $identity) {
             return null;
         }
 

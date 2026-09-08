@@ -14,7 +14,7 @@ class LiveKitServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->service = new LiveKitService();
+        $this->service = new LiveKitService;
     }
 
     public function test_generates_valid_host_livekit_token(): void

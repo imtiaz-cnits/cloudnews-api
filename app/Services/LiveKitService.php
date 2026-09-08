@@ -4,10 +4,7 @@ namespace App\Services;
 
 use Agence104\LiveKit\AccessToken;
 use Agence104\LiveKit\AccessTokenOptions;
-use Agence104\LiveKit\RoomCreateOptions;
-use Agence104\LiveKit\RoomServiceClient;
 use Agence104\LiveKit\VideoGrant;
-use Exception;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 use Illuminate\Support\Facades\Http;
@@ -27,16 +24,12 @@ class LiveKitService
 
     public function __construct()
     {
-        $host = config('livekit.url');
-        $this->host = !empty($host) ? $host : (env('LIVEKIT_URL') ?: 'http://127.0.0.1:7880');
         $this->host = rtrim(config('livekit.url', env('LIVEKIT_URL', 'http://119.28.138.19:7880')), '/');
         $this->apiKey = config('livekit.api_key', env('LIVEKIT_API_KEY', 'devkey'));
         $this->apiSecret = config('livekit.api_secret', env('LIVEKIT_API_SECRET', 'secret_token_for_cloudnews_2026_32chars'));
         $this->tokenTtl = (int) config('livekit.token_ttl', env('LIVEKIT_TOKEN_TTL', 21600)); // 6 hours
     }
 
-        $apiKey = config('livekit.api_key');
-        $this->apiKey = !empty($apiKey) ? $apiKey : (env('LIVEKIT_API_KEY') ?: 'devkey');
     /**
      * Get the configured LiveKit host URL.
      */
@@ -45,8 +38,6 @@ class LiveKitService
         return $this->host;
     }
 
-        $apiSecret = config('livekit.api_secret');
-        $this->apiSecret = !empty($apiSecret) ? $apiSecret : (env('LIVEKIT_API_SECRET') ?: 'dev_secret_key_at_least_32_characters_long!');
     /**
      * Generate an admin JWT token for server-to-server RPC calls.
      */
@@ -67,12 +58,8 @@ class LiveKitService
     }
 
     /**
-     * Create a new class instance.
-     * Create or configure a LiveKit room.
      * Generate a participant or host access token to join a room.
      */
-    public function __construct()
-    public function createRoom(string $roomName, array $options = [])
     public function generateJoinToken(
         string $roomName,
         string $identity,
@@ -112,19 +99,9 @@ class LiveKitService
      */
     public function createRoom(string $roomName, array $options = []): array
     {
-        //
         try {
-            $client = new RoomServiceClient($this->host, $this->apiKey, $this->apiSecret);
-            $roomOptions = (new RoomCreateOptions())
-                ->setName($roomName)
-                ->setEmptyTimeout($options['empty_timeout'] ?? 300)
-                ->setMaxParticipants($options['max_participants'] ?? 50);
             $adminToken = $this->generateAdminToken(120);
 
-            return $client->createRoom($roomOptions);
-        } catch (Exception $e) {
-            Log::error('LiveKit createRoom error: ' . $e->getMessage());
-            throw $e;
             $payload = [
                 'name' => $roomName,
                 'empty_timeout' => $options['empty_timeout'] ?? 300,
@@ -151,21 +128,13 @@ class LiveKitService
     }
 
     /**
-     * Generate an access token to join a room.
      * Terminate and delete a room on the LiveKit SFU via Twirp JSON API.
      */
-    public function generateJoinToken(string $roomName, string $identity, ?string $name = null, array $metadata = []): string
     public function deleteRoom(string $roomName): bool
     {
         try {
-            $tokenOptions = (new AccessTokenOptions())
-                ->setIdentity($identity)
-                ->setTtl(6 * 60 * 60); // 6 hours
             $adminToken = $this->generateAdminToken(120);
 
-            if ($name) {
-                $tokenOptions->setName($name);
-            }
             $response = Http::withToken($adminToken)
                 ->asJson()
                 ->timeout(5)
@@ -173,33 +142,20 @@ class LiveKitService
                     'room' => $roomName,
                 ]);
 
-            if (!empty($metadata)) {
-                $tokenOptions->setMetadata(json_encode($metadata));
             if ($response->successful()) {
                 return true;
             }
 
-            $accessToken = new AccessToken($this->apiKey, $this->apiSecret, $tokenOptions);
             Log::warning('LiveKit deleteRoom response: '.$response->status().' - '.$response->body());
 
-            $grant = (new VideoGrant())
-                ->setRoomJoin(true)
-                ->setRoomName($roomName)
-                ->setCanPublish(true)
-                ->setCanSubscribe(true);
             return false;
         } catch (Throwable $e) {
             Log::error('LiveKit deleteRoom exception: '.$e->getMessage());
 
-            $accessToken->setGrant($grant);
             return false;
         }
     }
 
-            return $accessToken->toJwt();
-        } catch (Exception $e) {
-            Log::error('LiveKit generateJoinToken error: ' . $e->getMessage());
-            throw $e;
     /**
      * Verify LiveKit webhook signature and SHA256 checksum, then decode payload.
      *
