@@ -38,7 +38,20 @@ class UserFactory extends Factory
      */
     public function unverified(): static
     {
-        return $this->state(fn (array $attributes) => [
+        return $this->state(fn(array $attributes) => [
+            'email_verified_at' => null,
+        ]);
+    }
+
+    /**
+     * Indicate that the model is a guest user.
+     */
+    public function guest(): static
+    {
+        return $this->state(fn(array $attributes) => [
+            'email' => null,
+            'password' => null,
+            'is_guest' => true,
             'email_verified_at' => null,
         ]);
     }
