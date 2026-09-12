@@ -13,14 +13,12 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
-#[Fillable(['name', 'email', 'password'])]
+#[Fillable(['name', 'username', 'email', 'password', 'role', 'is_guest', 'avatar_url'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
-    use HasApiTokens, HasFactory, Notifiable;
-
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable;
 
     /**
      * The attributes that are mass assignable.
@@ -29,8 +27,10 @@ class User extends Authenticatable
      */
     protected $fillable = [
         'name',
+        'username',
         'email',
         'password',
+        'role',
         'is_guest',
         'avatar_url',
     ];
@@ -57,6 +57,30 @@ class User extends Authenticatable
             'password' => 'hashed',
             'is_guest' => 'boolean',
         ];
+    }
+
+    /**
+     * Determine if the user is a super admin.
+     */
+    public function isAdmin(): bool
+    {
+        return $this->role === 'admin';
+    }
+
+    /**
+     * Determine if the user is a meeting host.
+     */
+    public function isHost(): bool
+    {
+        return $this->role === 'host';
+    }
+
+    /**
+     * Determine if the user is a guest.
+     */
+    public function isGuest(): bool
+    {
+        return $this->role === 'guest' || (bool) $this->is_guest;
     }
 
     /**

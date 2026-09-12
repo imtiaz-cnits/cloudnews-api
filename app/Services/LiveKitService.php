@@ -117,11 +117,11 @@ class LiveKitService
                 return $response->json() ?? ['name' => $roomName];
             }
 
-            Log::warning('LiveKit createRoom API warning: '.$response->status().' '.$response->body());
+            Log::warning('LiveKit createRoom API warning: ' . $response->status() . ' ' . $response->body());
 
             return ['name' => $roomName];
         } catch (Throwable $e) {
-            Log::warning('LiveKit createRoom exception (LiveKit will create implicitly on join): '.$e->getMessage());
+            Log::warning('LiveKit createRoom exception (LiveKit will create implicitly on join): ' . $e->getMessage());
 
             return ['name' => $roomName];
         }
@@ -146,11 +146,11 @@ class LiveKitService
                 return true;
             }
 
-            Log::warning('LiveKit deleteRoom response: '.$response->status().' - '.$response->body());
+            Log::warning('LiveKit deleteRoom response: ' . $response->status() . ' - ' . $response->body());
 
             return false;
         } catch (Throwable $e) {
-            Log::error('LiveKit deleteRoom exception: '.$e->getMessage());
+            Log::error('LiveKit deleteRoom exception: ' . $e->getMessage());
 
             return false;
         }
@@ -179,7 +179,7 @@ class LiveKitService
         try {
             $decoded = JWT::decode($authHeader, new Key($this->apiSecret, 'HS256'));
         } catch (Throwable $e) {
-            throw new InvalidArgumentException('Invalid authorization token: '.$e->getMessage());
+            throw new InvalidArgumentException('Invalid authorization token: ' . $e->getMessage());
         }
 
         if (! isset($decoded->iss) || $decoded->iss !== $this->apiKey) {
