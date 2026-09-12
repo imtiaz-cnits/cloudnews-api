@@ -5,7 +5,7 @@
 
 @section('content')
 <div class="max-w-2xl mx-auto">
-    
+
     <!-- Breadcrumb / Back Link -->
     <div class="mb-6">
         <a href="{{ route('dashboard.hosts.index') }}" class="inline-flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-sky-400 transition">
@@ -32,7 +32,7 @@
                     placeholder="e.g. Professor Sarah Connor"
                     class="w-full px-4 py-3 rounded-xl bg-[#060D17] border border-slate-700 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-sky-500 transition">
                 @error('name')
-                    <p class="mt-1 text-xs text-rose-400">{{ $message }}</p>
+                <p class="mt-1 text-xs text-rose-400">{{ $message }}</p>
                 @enderror
             </div>
 
@@ -51,7 +51,7 @@
                     </div>
                     <p class="text-[11px] text-slate-500 mt-1">Allows login without typing full email.</p>
                     @error('username')
-                        <p class="mt-1 text-xs text-rose-400">{{ $message }}</p>
+                    <p class="mt-1 text-xs text-rose-400">{{ $message }}</p>
                     @enderror
                 </div>
 
@@ -64,7 +64,7 @@
                         placeholder="sarah@example.com"
                         class="w-full px-4 py-3 rounded-xl bg-[#060D17] border border-slate-700 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-sky-500 transition">
                     @error('email')
-                        <p class="mt-1 text-xs text-rose-400">{{ $message }}</p>
+                    <p class="mt-1 text-xs text-rose-400">{{ $message }}</p>
                     @enderror
                 </div>
             </div>
@@ -82,7 +82,7 @@
                     If left empty, a secure 12-character random password will be created and shown upon save.
                 </p>
                 @error('password')
-                    <p class="mt-1 text-xs text-rose-400">{{ $message }}</p>
+                <p class="mt-1 text-xs text-rose-400">{{ $message }}</p>
                 @enderror
             </div>
 

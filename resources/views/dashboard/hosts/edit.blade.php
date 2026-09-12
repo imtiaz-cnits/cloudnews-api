@@ -5,7 +5,7 @@
 
 @section('content')
 <div class="max-w-2xl mx-auto">
-    
+
     <!-- Breadcrumb / Back Link -->
     <div class="mb-6">
         <a href="{{ route('dashboard.hosts.index') }}" class="inline-flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-sky-400 transition">
@@ -37,7 +37,7 @@
                 <input type="text" id="name" name="name" value="{{ old('name', $host->name) }}" required
                     class="w-full px-4 py-3 rounded-xl bg-[#060D17] border border-slate-700 text-white text-sm focus:outline-none focus:border-sky-500 transition">
                 @error('name')
-                    <p class="mt-1 text-xs text-rose-400">{{ $message }}</p>
+                <p class="mt-1 text-xs text-rose-400">{{ $message }}</p>
                 @enderror
             </div>
 
@@ -55,7 +55,7 @@
                             class="w-full pl-8 pr-4 py-3 rounded-xl bg-[#060D17] border border-slate-700 text-white text-sm focus:outline-none focus:border-sky-500 transition">
                     </div>
                     @error('username')
-                        <p class="mt-1 text-xs text-rose-400">{{ $message }}</p>
+                    <p class="mt-1 text-xs text-rose-400">{{ $message }}</p>
                     @enderror
                 </div>
 
@@ -67,7 +67,7 @@
                     <input type="email" id="email" name="email" value="{{ old('email', $host->email) }}" required
                         class="w-full px-4 py-3 rounded-xl bg-[#060D17] border border-slate-700 text-white text-sm focus:outline-none focus:border-sky-500 transition">
                     @error('email')
-                        <p class="mt-1 text-xs text-rose-400">{{ $message }}</p>
+                    <p class="mt-1 text-xs text-rose-400">{{ $message }}</p>
                     @enderror
                 </div>
             </div>
@@ -82,7 +82,7 @@
                     class="w-full px-4 py-3 rounded-xl bg-[#060D17] border border-slate-700 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-sky-500 transition">
                 <p class="text-[11px] text-slate-500 mt-1">Leave empty if you do not wish to change the host's existing password.</p>
                 @error('password')
-                    <p class="mt-1 text-xs text-rose-400">{{ $message }}</p>
+                <p class="mt-1 text-xs text-rose-400">{{ $message }}</p>
                 @enderror
             </div>
 

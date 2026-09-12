@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en" class="scroll-smooth bg-[#040912]">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -39,11 +40,13 @@
         body {
             font-family: 'Plus Jakarta Sans', sans-serif;
         }
+
         .hero-glow {
             background: radial-gradient(circle at 50% 20%, rgba(2, 132, 199, 0.25) 0%, rgba(4, 9, 18, 0) 70%);
         }
     </style>
 </head>
+
 <body class="text-slate-200 antialiased min-h-screen flex flex-col bg-[#040912]">
 
     <!-- Navigation Bar -->
@@ -75,17 +78,17 @@
             <!-- Action Button -->
             <div class="flex items-center gap-3">
                 @auth
-                    @if(Auth::user()->role === 'admin')
-                        <a href="{{ route('dashboard.index') }}" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-sky-600 to-sky-500 text-white font-semibold text-sm shadow-lg shadow-sky-500/20 hover:from-sky-500 hover:to-sky-400 transition">
-                            Admin Dashboard &rarr;
-                        </a>
-                    @else
-                        <span class="text-xs text-slate-400">Logged in as {{ Auth::user()->name }}</span>
-                    @endif
+                @if(Auth::user()->role === 'admin')
+                <a href="{{ route('dashboard.index') }}" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-sky-600 to-sky-500 text-white font-semibold text-sm shadow-lg shadow-sky-500/20 hover:from-sky-500 hover:to-sky-400 transition">
+                    Admin Dashboard &rarr;
+                </a>
                 @else
-                    <a href="{{ route('login') }}" class="px-5 py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold text-sm transition">
-                        Host Login
-                    </a>
+                <span class="text-xs text-slate-400">Logged in as {{ Auth::user()->name }}</span>
+                @endif
+                @else
+                <a href="{{ route('login') }}" class="px-5 py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold text-sm transition">
+                    Host Login
+                </a>
                 @endauth
             </div>
         </div>
@@ -93,10 +96,10 @@
 
     <!-- Main Content -->
     <main class="flex-1 hero-glow">
-        
+
         <!-- Hero Section -->
         <section class="max-w-7xl mx-auto px-6 pt-16 pb-24 md:pt-24 md:pb-32 text-center">
-            
+
             <!-- Live Status Pill -->
             <div class="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-sky-500/10 border border-sky-500/30 text-sky-300 text-xs font-semibold mb-8 shadow-sm">
                 <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
@@ -333,4 +336,5 @@
     </footer>
 
 </body>
+
 </html>

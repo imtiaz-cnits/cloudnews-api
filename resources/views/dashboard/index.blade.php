@@ -5,7 +5,7 @@
 
 @section('content')
 <div class="space-y-8">
-    
+
     <!-- Top Welcome Banner -->
     <div class="p-6 md:p-8 rounded-2xl bg-gradient-to-r from-sky-950/60 via-slate-900/60 to-slate-900 border border-brand-border flex flex-col md:flex-row items-start md:items-center justify-between gap-6 shadow-xl backdrop-blur-md">
         <div>
@@ -32,7 +32,7 @@
 
     <!-- 4 Stats Cards Grid -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        
+
         <!-- Card 1: Total Hosts -->
         <div class="glass-panel p-6 rounded-2xl shadow-lg border border-brand-border hover:border-sky-500/40 transition">
             <div class="flex items-center justify-between">
@@ -66,7 +66,7 @@
                 <div class="text-3xl font-black text-rose-400 font-mono flex items-center gap-2">
                     {{ $activeMeetings }}
                     @if($activeMeetings > 0)
-                        <span class="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping"></span>
+                    <span class="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping"></span>
                     @endif
                 </div>
                 <div class="text-xs text-slate-400 mt-1">Live SFU conference streams</div>
@@ -109,7 +109,7 @@
 
     <!-- Data Overview Tables (Recent Hosts & Recent Meetings) -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        
+
         <!-- Recent Hosts Table -->
         <div class="glass-panel rounded-2xl p-6 border border-brand-border">
             <div class="flex items-center justify-between mb-5">
@@ -134,29 +134,29 @@
                     </thead>
                     <tbody class="divide-y divide-slate-800/60">
                         @forelse($recentHosts as $h)
-                            <tr class="hover:bg-slate-800/40 transition">
-                                <td class="py-3 font-medium text-white">
-                                    <div class="truncate max-w-[140px]">{{ $h->name }}</div>
-                                    <div class="text-[11px] text-slate-400 truncate max-w-[140px]">{{ $h->email }}</div>
-                                </td>
-                                <td class="py-3 font-mono text-slate-300">
-                                    {{ $h->username ?? '—' }}
-                                </td>
-                                <td class="py-3 text-slate-400">
-                                    {{ $h->created_at ? $h->created_at->diffForHumans() : '—' }}
-                                </td>
-                                <td class="py-3 text-right">
-                                    <a href="{{ route('dashboard.hosts.edit', $h->id) }}" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-[11px] transition">
-                                        Edit
-                                    </a>
-                                </td>
-                            </tr>
+                        <tr class="hover:bg-slate-800/40 transition">
+                            <td class="py-3 font-medium text-white">
+                                <div class="truncate max-w-[140px]">{{ $h->name }}</div>
+                                <div class="text-[11px] text-slate-400 truncate max-w-[140px]">{{ $h->email }}</div>
+                            </td>
+                            <td class="py-3 font-mono text-slate-300">
+                                {{ $h->username ?? '—' }}
+                            </td>
+                            <td class="py-3 text-slate-400">
+                                {{ $h->created_at ? $h->created_at->diffForHumans() : '—' }}
+                            </td>
+                            <td class="py-3 text-right">
+                                <a href="{{ route('dashboard.hosts.edit', $h->id) }}" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-[11px] transition">
+                                    Edit
+                                </a>
+                            </td>
+                        </tr>
                         @empty
-                            <tr>
-                                <td colspan="4" class="py-6 text-center text-slate-500">
-                                    No host accounts found yet. <a href="{{ route('dashboard.hosts.create') }}" class="text-sky-400 hover:underline">Create one</a>.
-                                </td>
-                            </tr>
+                        <tr>
+                            <td colspan="4" class="py-6 text-center text-slate-500">
+                                No host accounts found yet. <a href="{{ route('dashboard.hosts.create') }}" class="text-sky-400 hover:underline">Create one</a>.
+                            </td>
+                        </tr>
                         @endforelse
                     </tbody>
                 </table>
@@ -185,36 +185,36 @@
                     </thead>
                     <tbody class="divide-y divide-slate-800/60">
                         @forelse($recentMeetings as $m)
-                            <tr class="hover:bg-slate-800/40 transition">
-                                <td class="py-3 font-medium text-white">
-                                    <div class="truncate max-w-[150px]">{{ $m->title }}</div>
-                                    <div class="text-[11px] text-sky-400 font-mono truncate max-w-[150px]">{{ $m->room_name }}</div>
-                                </td>
-                                <td class="py-3 text-slate-300">
-                                    {{ $m->host->name ?? 'Unknown' }}
-                                </td>
-                                <td class="py-3">
-                                    @if($m->is_active)
-                                        <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                                            Active
-                                        </span>
-                                    @else
-                                        <span class="inline-block px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-slate-400">
-                                            Ended
-                                        </span>
-                                    @endif
-                                </td>
-                                <td class="py-3 text-right text-slate-400">
-                                    {{ $m->created_at ? $m->created_at->diffForHumans() : '—' }}
-                                </td>
-                            </tr>
+                        <tr class="hover:bg-slate-800/40 transition">
+                            <td class="py-3 font-medium text-white">
+                                <div class="truncate max-w-[150px]">{{ $m->title }}</div>
+                                <div class="text-[11px] text-sky-400 font-mono truncate max-w-[150px]">{{ $m->room_name }}</div>
+                            </td>
+                            <td class="py-3 text-slate-300">
+                                {{ $m->host->name ?? 'Unknown' }}
+                            </td>
+                            <td class="py-3">
+                                @if($m->is_active)
+                                <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                    Active
+                                </span>
+                                @else
+                                <span class="inline-block px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-slate-400">
+                                    Ended
+                                </span>
+                                @endif
+                            </td>
+                            <td class="py-3 text-right text-slate-400">
+                                {{ $m->created_at ? $m->created_at->diffForHumans() : '—' }}
+                            </td>
+                        </tr>
                         @empty
-                            <tr>
-                                <td colspan="4" class="py-6 text-center text-slate-500">
-                                    No meetings created yet.
-                                </td>
-                            </tr>
+                        <tr>
+                            <td colspan="4" class="py-6 text-center text-slate-500">
+                                No meetings created yet.
+                            </td>
+                        </tr>
                         @endforelse
                     </tbody>
                 </table>
