@@ -14,7 +14,6 @@ use Illuminate\Support\Str;
 class Meeting extends Model
 {
     /** @use HasFactory<MeetingFactory> */
-    /** @use HasFactory<MeetingFactory> */
     use HasFactory;
 
     /**
@@ -31,6 +30,7 @@ class Meeting extends Model
         'is_active',
         'is_locked',
         'max_participants',
+        'scheduled_at',
         'started_at',
         'ended_at',
     ];
@@ -56,6 +56,7 @@ class Meeting extends Model
             'is_active' => 'boolean',
             'is_locked' => 'boolean',
             'max_participants' => 'integer',
+            'scheduled_at' => 'datetime',
             'started_at' => 'datetime',
             'ended_at' => 'datetime',
         ];

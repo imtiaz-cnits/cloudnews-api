@@ -9,6 +9,7 @@ use App\Http\Requests\Meeting\ValidateMeetingRequest;
 use App\Models\Meeting;
 use App\Models\MeetingParticipant;
 use App\Services\LiveKitService;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -100,6 +101,103 @@ class MeetingController extends Controller
             'token' => $token,
             'livekit_url' => $this->liveKitService->getHost(),
         ], 'Meeting created successfully', 201);
+    }
+
+    /**
+     * Schedule a future meeting.
+     */
+    public function schedule(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'title' => 'required|string|max:255',
+            'scheduled_at' => 'nullable|string',
+            'start_time' => 'nullable|string',
+            'date' => 'nullable|string',
+            'time' => 'nullable|string',
+            'passcode' => 'nullable|string|max:32',
+            'max_participants' => 'nullable|integer|min:2|max:100',
+        ]);
+
+        $scheduledAt = null;
+        if (! empty($validated['scheduled_at'])) {
+            $scheduledAt = rescue(fn () => Carbon::parse($validated['scheduled_at']), null, false);
+        } elseif (! empty($validated['start_time'])) {
+            $scheduledAt = rescue(fn () => Carbon::parse($validated['start_time']), null, false);
+        } elseif (! empty($validated['date'])) {
+            $dateStr = $validated['date'].' '.($validated['time'] ?? '00:00:00');
+            $scheduledAt = rescue(fn () => Carbon::parse($dateStr), null, false);
+        }
+
+        $roomName = Meeting::generateRoomName();
+        $meetingCode = Meeting::generateMeetingCode();
+
+        $meeting = Meeting::create([
+            'host_id' => $user->id,
+            'room_name' => $roomName,
+            'meeting_code' => $meetingCode,
+            'title' => $validated['title'],
+            'passcode' => $validated['passcode'] ?? null,
+            'is_active' => true,
+            'is_locked' => false,
+            'max_participants' => $validated['max_participants'] ?? 12,
+            'scheduled_at' => $scheduledAt ?? now()->addDay(),
+            'started_at' => null,
+        ]);
+
+        // Explicitly pre-create room on LiveKit SFU
+        $this->liveKitService->createRoom($roomName, [
+            'empty_timeout' => 300,
+            'max_participants' => $meeting->max_participants,
+        ]);
+
+        $meetingData = $meeting->toArray();
+        $meetingData['passcode'] = $meeting->passcode;
+        $meetingData['requires_passcode'] = $meeting->hasPasscode();
+        $meetingData['host'] = [
+            'id' => $user->id,
+            'name' => $user->name,
+            'avatar_url' => $user->avatar_url,
+        ];
+
+        return $this->successResponse([
+            'meeting' => $meetingData,
+        ], 'Meeting scheduled successfully', 201);
+    }
+
+    /**
+     * Get scheduled meetings for the authenticated user.
+     */
+    public function getScheduled(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $meetings = Meeting::with('host:id,name,avatar_url')
+            ->withCount('activeParticipants')
+            ->where(function ($query) use ($user) {
+                $query->where('host_id', $user->id)
+                    ->orWhereHas('participants', function ($pQuery) use ($user) {
+                        $pQuery->where('user_id', $user->id);
+                    });
+            })
+            ->where('is_active', true)
+            ->whereNull('ended_at')
+            ->orderByRaw('CASE WHEN scheduled_at IS NOT NULL THEN scheduled_at ELSE created_at END ASC')
+            ->get()
+            ->map(function ($meeting) use ($user) {
+                $meetingArray = $meeting->toArray();
+                $meetingArray['requires_passcode'] = $meeting->hasPasscode();
+                if ($user->id === $meeting->host_id) {
+                    $meetingArray['passcode'] = $meeting->passcode;
+                } else {
+                    unset($meetingArray['passcode']);
+                }
+
+                return $meetingArray;
+            });
+
+        return $this->successResponse($meetings, 'Scheduled meetings retrieved successfully');
     }
 
     /**

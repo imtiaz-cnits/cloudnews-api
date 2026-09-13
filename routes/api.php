@@ -25,6 +25,8 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:sanctum')->prefix('meetings')->group(function () {
         Route::get('/', [MeetingController::class, 'index']);
         Route::post('/', [MeetingController::class, 'store']);
+        Route::post('/schedule', [MeetingController::class, 'schedule']);
+        Route::get('/scheduled', [MeetingController::class, 'getScheduled']);
         Route::get('/{meeting_code}', [MeetingController::class, 'show']);
         Route::post('/{meeting_code}/join', [MeetingController::class, 'join']);
         Route::post('/{meeting_code}/end', [MeetingController::class, 'end']);
@@ -33,4 +35,16 @@ Route::prefix('v1')->group(function () {
 
     // LiveKit SFU Webhooks
     Route::post('/webhooks/livekit', [LiveKitWebhookController::class, 'handle']);
+});
+
+// Support direct routes without v1 prefix (e.g. /api/meetings/scheduled)
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/meetings/schedule', [MeetingController::class, 'schedule']);
+    Route::get('/meetings/scheduled', [MeetingController::class, 'getScheduled']);
+    Route::get('/meetings', [MeetingController::class, 'index']);
+    Route::post('/meetings', [MeetingController::class, 'store']);
+    Route::get('/meetings/{meeting_code}', [MeetingController::class, 'show']);
+    Route::post('/meetings/{meeting_code}/join', [MeetingController::class, 'join']);
+    Route::post('/meetings/{meeting_code}/end', [MeetingController::class, 'end']);
+    Route::post('/meetings/{meeting_code}/leave', [MeetingController::class, 'leave']);
 });

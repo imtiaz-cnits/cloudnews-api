@@ -301,4 +301,80 @@ class MeetingTest extends TestCase
             'left_at' => null,
         ]);
     }
+
+    public function test_user_can_schedule_meeting(): void
+    {
+        $host = User::factory()->create();
+
+        $response = $this->actingAs($host)->postJson('/api/v1/meetings/schedule', [
+            'title' => 'Design Sprint Kickoff',
+            'scheduled_at' => '2026-10-01 10:00:00',
+            'passcode' => '555666',
+            'max_participants' => 20,
+        ]);
+
+        $response->assertStatus(201)
+            ->assertJson([
+                'success' => true,
+                'message' => 'Meeting scheduled successfully',
+            ])
+            ->assertJsonStructure([
+                'data' => [
+                    'meeting' => [
+                        'id',
+                        'title',
+                        'meeting_code',
+                        'room_name',
+                        'scheduled_at',
+                        'passcode',
+                    ],
+                ],
+            ]);
+
+        $this->assertDatabaseHas('meetings', [
+            'title' => 'Design Sprint Kickoff',
+            'host_id' => $host->id,
+        ]);
+    }
+
+    public function test_user_can_get_scheduled_meetings(): void
+    {
+        $host = User::factory()->create();
+
+        // Create a scheduled meeting for this host
+        $scheduledMeeting = Meeting::factory()->create([
+            'host_id' => $host->id,
+            'title' => 'Sprint Planning',
+            'scheduled_at' => now()->addDays(2),
+            'is_active' => true,
+            'ended_at' => null,
+        ]);
+
+        // Create an ended meeting (should not be returned)
+        Meeting::factory()->create([
+            'host_id' => $host->id,
+            'title' => 'Past Meeting',
+            'scheduled_at' => now()->subDays(2),
+            'is_active' => false,
+            'ended_at' => now()->subDays(2),
+        ]);
+
+        // Test with v1 prefix
+        $responseV1 = $this->actingAs($host)->getJson('/api/v1/meetings/scheduled');
+        $responseV1->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'message' => 'Scheduled meetings retrieved successfully',
+            ])
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.title', 'Sprint Planning');
+
+        // Test direct route (/api/meetings/scheduled)
+        $responseDirect = $this->actingAs($host)->getJson('/api/meetings/scheduled');
+        $responseDirect->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+            ])
+            ->assertJsonCount(1, 'data');
+    }
 }
