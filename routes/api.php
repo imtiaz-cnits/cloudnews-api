@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\LiveKitWebhookController;
 use App\Http\Controllers\Api\V1\MeetingController;
+use App\Http\Controllers\Api\V1\UserController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
@@ -18,6 +19,9 @@ Route::prefix('v1')->group(function () {
         });
     });
 
+    // Users Directory / Contact List for Direct Messages
+    Route::get('/users', [UserController::class, 'index']);
+
     // Meeting Pre-validation (accessible before joining)
     Route::post('/meetings/validate', [MeetingController::class, 'validateMeeting']);
 
@@ -28,6 +32,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/schedule', [MeetingController::class, 'schedule']);
         Route::get('/scheduled', [MeetingController::class, 'getScheduled']);
         Route::get('/{meeting_code}', [MeetingController::class, 'show']);
+        Route::delete('/{meeting_code}', [MeetingController::class, 'destroy']);
         Route::post('/{meeting_code}/join', [MeetingController::class, 'join']);
         Route::post('/{meeting_code}/end', [MeetingController::class, 'end']);
         Route::post('/{meeting_code}/leave', [MeetingController::class, 'leave']);
@@ -37,13 +42,16 @@ Route::prefix('v1')->group(function () {
     Route::post('/webhooks/livekit', [LiveKitWebhookController::class, 'handle']);
 });
 
-// Support direct routes without v1 prefix (e.g. /api/meetings/scheduled)
+// Support direct routes without v1 prefix (e.g. /api/users, /api/meetings/scheduled, /api/meetings/{code})
+Route::get('/users', [UserController::class, 'index']);
+
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/meetings/schedule', [MeetingController::class, 'schedule']);
     Route::get('/meetings/scheduled', [MeetingController::class, 'getScheduled']);
     Route::get('/meetings', [MeetingController::class, 'index']);
     Route::post('/meetings', [MeetingController::class, 'store']);
     Route::get('/meetings/{meeting_code}', [MeetingController::class, 'show']);
+    Route::delete('/meetings/{meeting_code}', [MeetingController::class, 'destroy']);
     Route::post('/meetings/{meeting_code}/join', [MeetingController::class, 'join']);
     Route::post('/meetings/{meeting_code}/end', [MeetingController::class, 'end']);
     Route::post('/meetings/{meeting_code}/leave', [MeetingController::class, 'leave']);

@@ -118,6 +118,7 @@ class MeetingController extends Controller
             'time' => 'nullable|string',
             'passcode' => 'nullable|string|max:32',
             'max_participants' => 'nullable|integer|min:2|max:100',
+            'waiting_room' => 'nullable|boolean',
         ]);
 
         $scheduledAt = null;
@@ -141,6 +142,7 @@ class MeetingController extends Controller
             'passcode' => $validated['passcode'] ?? null,
             'is_active' => true,
             'is_locked' => false,
+            'waiting_room' => $request->boolean('waiting_room'),
             'max_participants' => $validated['max_participants'] ?? 12,
             'scheduled_at' => $scheduledAt ?? now()->addDay(),
             'started_at' => null,
@@ -155,6 +157,9 @@ class MeetingController extends Controller
         $meetingData = $meeting->toArray();
         $meetingData['passcode'] = $meeting->passcode;
         $meetingData['requires_passcode'] = $meeting->hasPasscode();
+        $meetingData['is_host'] = true;
+        $meetingData['waiting_room'] = (bool) $meeting->waiting_room;
+        $meetingData['status'] = 'upcoming';
         $meetingData['host'] = [
             'id' => $user->id,
             'name' => $user->name,
@@ -187,8 +192,27 @@ class MeetingController extends Controller
             ->get()
             ->map(function ($meeting) use ($user) {
                 $meetingArray = $meeting->toArray();
+                $isHost = ($user->id === $meeting->host_id);
+                $meetingArray['is_host'] = $isHost;
+                $meetingArray['waiting_room'] = (bool) ($meeting->waiting_room ?? false);
                 $meetingArray['requires_passcode'] = $meeting->hasPasscode();
-                if ($user->id === $meeting->host_id) {
+
+                // Compute dynamic status: 'upcoming' | 'ongoing' | 'expired'
+                $nowTs = now()->timestamp;
+                $scheduledTs = $meeting->scheduled_at ? $meeting->scheduled_at->timestamp : null;
+                $diffInMinutes = $scheduledTs ? (int) floor(($nowTs - $scheduledTs) / 60) : null;
+
+                if (! $meeting->is_active || $meeting->ended_at !== null || ($diffInMinutes !== null && $diffInMinutes > 120)) {
+                    $status = 'expired';
+                } elseif ($meeting->started_at !== null || ($diffInMinutes !== null && $diffInMinutes >= -15 && $diffInMinutes <= 120)) {
+                    $status = 'ongoing';
+                } else {
+                    $status = 'upcoming';
+                }
+
+                $meetingArray['status'] = $status;
+
+                if ($isHost) {
                     $meetingArray['passcode'] = $meeting->passcode;
                 } else {
                     unset($meetingArray['passcode']);
@@ -432,5 +456,48 @@ class MeetingController extends Controller
             ->update(['left_at' => now()]);
 
         return $this->successResponse(null, 'Left meeting successfully');
+    }
+
+    /**
+     * Delete a meeting and clean up SFU resources (Host only).
+     */
+    public function destroy(Request $request, string $meetingCode): JsonResponse
+    {
+        $cleanCode = str_replace(['-', ' '], '', $meetingCode);
+        $formattedCode = strlen($cleanCode) === 9
+            ? substr($cleanCode, 0, 3).'-'.substr($cleanCode, 3, 3).'-'.substr($cleanCode, 6, 3)
+            : $meetingCode;
+
+        $meeting = Meeting::where('meeting_code', $meetingCode)
+            ->orWhere('meeting_code', $formattedCode)
+            ->orWhere('meeting_code', $cleanCode)
+            ->orWhere('room_name', $meetingCode)
+            ->when(is_numeric($meetingCode), function ($query) use ($meetingCode) {
+                $query->orWhere('id', (int) $meetingCode);
+            })
+            ->first();
+
+        if (! $meeting) {
+            return $this->errorResponse('Meeting not found', 404);
+        }
+
+        $user = $request->user();
+
+        if ($meeting->host_id !== $user->id && ! $user->isAdmin()) {
+            return $this->errorResponse('Only the host can delete this meeting', 403);
+        }
+
+        // Clean up LiveKit SFU room if active or pre-created
+        try {
+            $this->liveKitService->deleteRoom($meeting->room_name);
+        } catch (\Throwable $e) {
+            // Room may already be closed or not found on SFU
+        }
+
+        // Delete participant records and meeting record
+        $meeting->participants()->delete();
+        $meeting->delete();
+
+        return $this->successResponse(null, 'Meeting deleted successfully');
     }
 }

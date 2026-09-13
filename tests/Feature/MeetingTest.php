@@ -377,4 +377,88 @@ class MeetingTest extends TestCase
             ])
             ->assertJsonCount(1, 'data');
     }
+
+    public function test_host_can_delete_meeting(): void
+    {
+        $host = User::factory()->create();
+
+        $meeting = Meeting::factory()->create([
+            'host_id' => $host->id,
+            'title' => 'Meeting To Be Deleted',
+            'meeting_code' => '999-888-777',
+        ]);
+
+        $response = $this->actingAs($host)->deleteJson("/api/v1/meetings/{$meeting->meeting_code}");
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'message' => 'Meeting deleted successfully',
+            ]);
+
+        $this->assertDatabaseMissing('meetings', [
+            'id' => $meeting->id,
+        ]);
+    }
+
+    public function test_non_host_cannot_delete_meeting(): void
+    {
+        $host = User::factory()->create();
+        $otherUser = User::factory()->create();
+
+        $meeting = Meeting::factory()->create([
+            'host_id' => $host->id,
+            'title' => 'Protected Meeting',
+        ]);
+
+        $response = $this->actingAs($otherUser)->deleteJson("/api/v1/meetings/{$meeting->meeting_code}");
+
+        $response->assertStatus(403)
+            ->assertJson([
+                'success' => false,
+                'message' => 'Only the host can delete this meeting',
+            ]);
+
+        $this->assertDatabaseHas('meetings', [
+            'id' => $meeting->id,
+        ]);
+    }
+
+    public function test_scheduled_meetings_contain_dynamic_status(): void
+    {
+        $host = User::factory()->create();
+
+        // 1. Upcoming meeting (future)
+        Meeting::factory()->create([
+            'host_id' => $host->id,
+            'title' => 'Future Meeting',
+            'scheduled_at' => now()->addHours(5),
+            'is_active' => true,
+            'ended_at' => null,
+            'started_at' => null,
+        ]);
+
+        // 2. Ongoing meeting (within -15 to +120 mins)
+        Meeting::factory()->create([
+            'host_id' => $host->id,
+            'title' => 'Current Ongoing Meeting',
+            'scheduled_at' => now()->subMinutes(10),
+            'is_active' => true,
+            'ended_at' => null,
+            'started_at' => null,
+        ]);
+
+        $response = $this->actingAs($host)->getJson('/api/v1/meetings/scheduled');
+
+        $response->assertStatus(200);
+        $data = collect($response->json('data'));
+
+        $future = $data->firstWhere('title', 'Future Meeting');
+        $this->assertEquals('upcoming', $future['status']);
+        $this->assertTrue($future['is_host']);
+        $this->assertArrayHasKey('waiting_room', $future);
+
+        $ongoing = $data->firstWhere('title', 'Current Ongoing Meeting');
+        $this->assertEquals('ongoing', $ongoing['status']);
+    }
 }
