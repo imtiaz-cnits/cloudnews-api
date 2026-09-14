@@ -127,20 +127,20 @@ class MeetingTest extends TestCase
         ])->assertStatus(422)
             ->assertJsonPath('message', 'Invalid meeting passcode');
 
-        // 4. Correct passcode
+        // 4. Correct passcode (using 'code' parameter as mobile app sends)
         $this->postJson('/api/v1/meetings/validate', [
-            'meeting_code' => $meeting->meeting_code,
+            'code' => $meeting->meeting_code,
             'passcode' => 'CorrectPasscode',
         ])->assertStatus(200)
             ->assertJsonPath('data.valid', true);
 
-        // 5. Inactive meeting
+        // 5. Inactive meeting is reactivated and allowed (persistent meetings)
         $meeting->update(['is_active' => false]);
-        $this->postJson('/api/v1/meetings/validate', [
-            'meeting_code' => $meeting->meeting_code,
+        $this->postJson('/api/meetings/validate', [
+            'code' => str_replace('-', '', $meeting->meeting_code),
             'passcode' => 'CorrectPasscode',
-        ])->assertStatus(422)
-            ->assertJsonPath('message', 'This meeting has already ended');
+        ])->assertStatus(200)
+            ->assertJsonPath('data.valid', true);
 
         // 6. Locked meeting
         $meeting->update(['is_active' => true, 'is_locked' => true]);
@@ -460,5 +460,47 @@ class MeetingTest extends TestCase
 
         $ongoing = $data->firstWhere('title', 'Current Ongoing Meeting');
         $this->assertEquals('ongoing', $ongoing['status']);
+    }
+
+    public function test_user_can_join_meeting_via_cleaned_code_or_url(): void
+    {
+        $host = User::factory()->create();
+        $guest = User::factory()->guest()->create();
+
+        $meeting = Meeting::factory()->create([
+            'host_id' => $host->id,
+            'meeting_code' => '801-981-285',
+            'room_name' => 'cloudnews-testroom123',
+            'is_active' => true,
+        ]);
+
+        // 1. Join using clean digits without dashes (801981285)
+        $cleanCode = '801981285';
+        $responseClean = $this->actingAs($guest)->postJson("/api/v1/meetings/{$cleanCode}/join");
+        $responseClean->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'data' => [
+                    'meeting_code' => '801-981-285',
+                    'room_name' => 'cloudnews-testroom123',
+                ],
+            ])
+            ->assertJsonStructure([
+                'data' => ['token', 'livekit_token', 'room_name', 'meeting_code'],
+            ]);
+
+        // 2. Join via direct route using URL-like code path
+        $responseDirect = $this->actingAs($guest)->postJson("/api/meetings/{$meeting->meeting_code}/join");
+        $responseDirect->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+            ]);
+
+        // 3. Join by internal room name
+        $responseRoomName = $this->actingAs($guest)->postJson("/api/v1/meetings/{$meeting->room_name}/join");
+        $responseRoomName->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+            ]);
     }
 }

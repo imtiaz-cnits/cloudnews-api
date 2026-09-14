@@ -70,18 +70,17 @@ class LiveKitWebhookController extends Controller
     }
 
     /**
-     * Handle room_finished event.
+     * Handle room_finished event from SFU when room is empty or closed.
      */
     protected function handleRoomFinished(Meeting $meeting): void
     {
-        $meeting->update([
-            'is_active' => false,
-            'ended_at' => now(),
-        ]);
-
+        // Mark all active participants as departed when room empties
         MeetingParticipant::where('meeting_id', $meeting->id)
             ->whereNull('left_at')
             ->update(['left_at' => now()]);
+
+        // Note: Meetings remain persistent and can be rejoined anytime with the same link/code
+        // until explicitly deleted by the host or admin.
     }
 
     /**

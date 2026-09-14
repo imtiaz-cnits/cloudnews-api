@@ -42,8 +42,9 @@ Route::prefix('v1')->group(function () {
     Route::post('/webhooks/livekit', [LiveKitWebhookController::class, 'handle']);
 });
 
-// Support direct routes without v1 prefix (e.g. /api/users, /api/meetings/scheduled, /api/meetings/{code})
+// Support direct routes without v1 prefix (e.g. /api/users, /api/meetings/scheduled, /api/meetings/validate, /api/meetings/{code})
 Route::get('/users', [UserController::class, 'index']);
+Route::post('/meetings/validate', [MeetingController::class, 'validateMeeting']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/meetings/schedule', [MeetingController::class, 'schedule']);

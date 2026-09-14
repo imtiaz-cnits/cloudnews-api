@@ -65,7 +65,7 @@ class MeetingController extends Controller
 
         // Explicitly pre-create room on LiveKit SFU
         $this->liveKitService->createRoom($roomName, [
-            'empty_timeout' => 300,
+            'empty_timeout' => 86400,
             'max_participants' => $meeting->max_participants,
         ]);
 
@@ -88,7 +88,6 @@ class MeetingController extends Controller
         );
 
         $meetingData = $meeting->toArray();
-        // Since caller is host, include plain passcode
         $meetingData['passcode'] = $meeting->passcode;
         $meetingData['host'] = [
             'id' => $user->id,
@@ -99,6 +98,10 @@ class MeetingController extends Controller
         return $this->successResponse([
             'meeting' => $meetingData,
             'token' => $token,
+            'livekit_token' => $token,
+            'room_name' => $meeting->room_name,
+            'meeting_code' => $meeting->meeting_code,
+            'is_host' => true,
             'livekit_url' => $this->liveKitService->getHost(),
         ], 'Meeting created successfully', 201);
     }
@@ -150,7 +153,7 @@ class MeetingController extends Controller
 
         // Explicitly pre-create room on LiveKit SFU
         $this->liveKitService->createRoom($roomName, [
-            'empty_timeout' => 300,
+            'empty_timeout' => 86400,
             'max_participants' => $meeting->max_participants,
         ]);
 
@@ -197,18 +200,11 @@ class MeetingController extends Controller
                 $meetingArray['waiting_room'] = (bool) ($meeting->waiting_room ?? false);
                 $meetingArray['requires_passcode'] = $meeting->hasPasscode();
 
-                // Compute dynamic status: 'upcoming' | 'ongoing' | 'expired'
-                $nowTs = now()->timestamp;
+                // Compute status: 'upcoming' | 'ongoing'
+                // Persistent meetings never expire until deleted!
                 $scheduledTs = $meeting->scheduled_at ? $meeting->scheduled_at->timestamp : null;
-                $diffInMinutes = $scheduledTs ? (int) floor(($nowTs - $scheduledTs) / 60) : null;
-
-                if (! $meeting->is_active || $meeting->ended_at !== null || ($diffInMinutes !== null && $diffInMinutes > 120)) {
-                    $status = 'expired';
-                } elseif ($meeting->started_at !== null || ($diffInMinutes !== null && $diffInMinutes >= -15 && $diffInMinutes <= 120)) {
-                    $status = 'ongoing';
-                } else {
-                    $status = 'upcoming';
-                }
+                $isUpcoming = $scheduledTs && ($scheduledTs > (now()->timestamp + 900));
+                $status = $isUpcoming ? 'upcoming' : 'ongoing';
 
                 $meetingArray['status'] = $status;
 
@@ -229,14 +225,18 @@ class MeetingController extends Controller
      */
     public function show(Request $request, string $meetingCode): JsonResponse
     {
-        $meeting = Meeting::with('host:id,name,avatar_url')
-            ->withCount('activeParticipants')
-            ->where('meeting_code', $meetingCode)
-            ->orWhere('room_name', $meetingCode)
-            ->first();
+        $meeting = $this->findMeetingByCode($meetingCode);
 
         if (! $meeting) {
             return $this->errorResponse('Meeting not found', 404);
+        }
+
+        // Keep persistent meeting active
+        if (! $meeting->is_active) {
+            $meeting->update([
+                'is_active' => true,
+                'ended_at' => null,
+            ]);
         }
 
         $user = $request->user();
@@ -247,13 +247,15 @@ class MeetingController extends Controller
             'title' => $meeting->title,
             'meeting_code' => $meeting->meeting_code,
             'room_name' => $meeting->room_name,
-            'is_active' => $meeting->is_active,
+            'is_active' => true,
             'is_locked' => $meeting->is_locked,
+            'waiting_room' => (bool) $meeting->waiting_room,
             'max_participants' => $meeting->max_participants,
             'active_participants_count' => $meeting->active_participants_count,
             'started_at' => $meeting->started_at,
             'ended_at' => $meeting->ended_at,
             'requires_passcode' => $meeting->hasPasscode(),
+            'is_host' => $isHost,
             'host' => $meeting->host,
         ];
 
@@ -270,19 +272,18 @@ class MeetingController extends Controller
      */
     public function validateMeeting(ValidateMeetingRequest $request): JsonResponse
     {
-        $validated = $request->validated();
-
-        $meeting = Meeting::where('meeting_code', $validated['meeting_code'])
-            ->orWhere('room_name', $validated['meeting_code'])
-            ->first();
+        $rawCode = $request->validated('code') ?? $request->validated('meeting_code') ?? '';
+        $meeting = $this->findMeetingByCode($rawCode);
 
         if (! $meeting) {
-            return $this->errorResponse('Meeting not found', 404);
+            return $this->errorResponse('Meeting not found. Please check the code or link.', 404);
         }
 
+        // Keep persistent meeting active
         if (! $meeting->is_active) {
-            return $this->errorResponse('This meeting has already ended', 422, [
-                'is_active' => false,
+            $meeting->update([
+                'is_active' => true,
+                'ended_at' => null,
             ]);
         }
 
@@ -293,13 +294,14 @@ class MeetingController extends Controller
         }
 
         if ($meeting->hasPasscode()) {
-            if (empty($validated['passcode'])) {
+            $passcode = $request->validated('passcode');
+            if (empty($passcode)) {
                 return $this->errorResponse('Passcode is required to join this meeting', 422, [
                     'requires_passcode' => true,
                 ]);
             }
 
-            if (! $meeting->verifyPasscode($validated['passcode'])) {
+            if (! $meeting->verifyPasscode($passcode)) {
                 return $this->errorResponse('Invalid meeting passcode', 422, [
                     'invalid_passcode' => true,
                 ]);
@@ -317,7 +319,7 @@ class MeetingController extends Controller
             'meeting_code' => $meeting->meeting_code,
             'room_name' => $meeting->room_name,
             'title' => $meeting->title,
-            'is_active' => $meeting->is_active,
+            'is_active' => true,
             'is_locked' => $meeting->is_locked,
             'requires_passcode' => $meeting->hasPasscode(),
         ], 'Meeting is valid and ready to join');
@@ -328,16 +330,18 @@ class MeetingController extends Controller
      */
     public function join(JoinMeetingRequest $request, string $meetingCode): JsonResponse
     {
-        $meeting = Meeting::where('meeting_code', $meetingCode)
-            ->orWhere('room_name', $meetingCode)
-            ->first();
+        $meeting = $this->findMeetingByCode($meetingCode);
 
         if (! $meeting) {
-            return $this->errorResponse('Meeting not found', 404);
+            return $this->errorResponse('Meeting not found. Please check the code or link.', 404);
         }
 
-        if (! $meeting->is_active) {
-            return $this->errorResponse('This meeting has ended', 422);
+        // As long as the meeting exists in DB, ensure it is active
+        if (! $meeting->is_active || $meeting->ended_at !== null) {
+            $meeting->update([
+                'is_active' => true,
+                'ended_at' => null,
+            ]);
         }
 
         $user = $request->user();
@@ -389,12 +393,14 @@ class MeetingController extends Controller
 
         return $this->successResponse([
             'token' => $token,
+            'livekit_token' => $token,
             'room_name' => $meeting->room_name,
             'meeting_code' => $meeting->meeting_code,
             'title' => $meeting->title,
             'identity' => $identity,
             'name' => $user->name,
             'role' => $role,
+            'is_host' => $isHost,
             'livekit_url' => $this->liveKitService->getHost(),
         ], 'Joined meeting successfully');
     }
@@ -404,9 +410,7 @@ class MeetingController extends Controller
      */
     public function end(Request $request, string $meetingCode): JsonResponse
     {
-        $meeting = Meeting::where('meeting_code', $meetingCode)
-            ->orWhere('room_name', $meetingCode)
-            ->first();
+        $meeting = $this->findMeetingByCode($meetingCode);
 
         if (! $meeting) {
             return $this->errorResponse('Meeting not found', 404);
@@ -414,7 +418,7 @@ class MeetingController extends Controller
 
         $user = $request->user();
 
-        if ($meeting->host_id !== $user->id) {
+        if ($meeting->host_id !== $user->id && ! $user->isAdmin()) {
             return $this->errorResponse('Only the host can end this meeting', 403);
         }
 
@@ -439,9 +443,7 @@ class MeetingController extends Controller
      */
     public function leave(Request $request, string $meetingCode): JsonResponse
     {
-        $meeting = Meeting::where('meeting_code', $meetingCode)
-            ->orWhere('room_name', $meetingCode)
-            ->first();
+        $meeting = $this->findMeetingByCode($meetingCode);
 
         if (! $meeting) {
             return $this->errorResponse('Meeting not found', 404);
@@ -463,19 +465,7 @@ class MeetingController extends Controller
      */
     public function destroy(Request $request, string $meetingCode): JsonResponse
     {
-        $cleanCode = str_replace(['-', ' '], '', $meetingCode);
-        $formattedCode = strlen($cleanCode) === 9
-            ? substr($cleanCode, 0, 3).'-'.substr($cleanCode, 3, 3).'-'.substr($cleanCode, 6, 3)
-            : $meetingCode;
-
-        $meeting = Meeting::where('meeting_code', $meetingCode)
-            ->orWhere('meeting_code', $formattedCode)
-            ->orWhere('meeting_code', $cleanCode)
-            ->orWhere('room_name', $meetingCode)
-            ->when(is_numeric($meetingCode), function ($query) use ($meetingCode) {
-                $query->orWhere('id', (int) $meetingCode);
-            })
-            ->first();
+        $meeting = $this->findMeetingByCode($meetingCode);
 
         if (! $meeting) {
             return $this->errorResponse('Meeting not found', 404);
@@ -499,5 +489,41 @@ class MeetingController extends Controller
         $meeting->delete();
 
         return $this->successResponse(null, 'Meeting deleted successfully');
+    }
+
+    /**
+     * Find a meeting by flexible code, room name, ID, or shared link.
+     */
+    protected function findMeetingByCode(string $rawInput): ?Meeting
+    {
+        $rawInput = trim($rawInput);
+
+        // If it's a URL or contains slashes, extract the last segment of the path
+        if (str_contains($rawInput, '/')) {
+            $path = parse_url($rawInput, PHP_URL_PATH) ?? $rawInput;
+            $segments = array_values(array_filter(explode('/', $path)));
+            $rawInput = ! empty($segments) ? end($segments) : $rawInput;
+        }
+
+        // Strip query string or hashes if present
+        $rawInput = trim(explode('?', explode('#', $rawInput)[0])[0]);
+
+        // Clean digits
+        $cleanDigits = preg_replace('/\D/', '', $rawInput);
+
+        // 9-digit formatted code (XXX-XXX-XXX)
+        $formattedCode = (strlen($cleanDigits) === 9)
+            ? substr($cleanDigits, 0, 3).'-'.substr($cleanDigits, 3, 3).'-'.substr($cleanDigits, 6, 3)
+            : $rawInput;
+
+        return Meeting::where('meeting_code', $rawInput)
+            ->orWhere('meeting_code', $formattedCode)
+            ->orWhere('meeting_code', $cleanDigits)
+            ->orWhere('room_name', $rawInput)
+            ->orWhere('room_name', strtolower($rawInput))
+            ->when(is_numeric($rawInput), function ($query) use ($rawInput) {
+                $query->orWhere('id', (int) $rawInput);
+            })
+            ->first();
     }
 }

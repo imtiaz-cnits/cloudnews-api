@@ -88,8 +88,7 @@ class LiveKitWebhookTest extends TestCase
             ->assertJsonPath('success', true);
 
         $fresh = $meeting->fresh();
-        $this->assertFalse($fresh->is_active);
-        $this->assertNotNull($fresh->ended_at);
+        $this->assertTrue($fresh->is_active);
 
         $this->assertDatabaseMissing('meeting_participants', [
             'meeting_id' => $meeting->id,

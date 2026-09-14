@@ -23,7 +23,8 @@ class ValidateMeetingRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'meeting_code' => ['required', 'string', 'max:20'],
+            'meeting_code' => ['required_without:code', 'nullable', 'string', 'max:255'],
+            'code' => ['required_without:meeting_code', 'nullable', 'string', 'max:255'],
             'passcode' => ['nullable', 'string', 'max:32'],
         ];
     }
