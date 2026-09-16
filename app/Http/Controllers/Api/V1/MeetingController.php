@@ -26,6 +26,10 @@ class MeetingController extends Controller
     {
         $user = $request->user();
 
+        if ($user->isGuest()) {
+            return $this->successResponse([], 'Guests do not have meeting dashboard access');
+        }
+
         $meetings = Meeting::with('host:id,name,avatar_url')
             ->withCount('activeParticipants')
             ->where(function ($query) use ($user) {
@@ -46,6 +50,11 @@ class MeetingController extends Controller
     public function store(CreateMeetingRequest $request): JsonResponse
     {
         $user = $request->user();
+
+        if ($user->isGuest()) {
+            return $this->errorResponse('Guests are not permitted to create or host meetings. Please log in.', 403);
+        }
+
         $validated = $request->validated();
 
         $roomName = Meeting::generateRoomName();
@@ -113,6 +122,10 @@ class MeetingController extends Controller
     {
         $user = $request->user();
 
+        if ($user->isGuest()) {
+            return $this->errorResponse('Guests are not permitted to schedule meetings. Please log in.', 403);
+        }
+
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'scheduled_at' => 'nullable|string',
@@ -126,12 +139,12 @@ class MeetingController extends Controller
 
         $scheduledAt = null;
         if (! empty($validated['scheduled_at'])) {
-            $scheduledAt = rescue(fn () => Carbon::parse($validated['scheduled_at']), null, false);
+            $scheduledAt = rescue(fn() => Carbon::parse($validated['scheduled_at']), null, false);
         } elseif (! empty($validated['start_time'])) {
-            $scheduledAt = rescue(fn () => Carbon::parse($validated['start_time']), null, false);
+            $scheduledAt = rescue(fn() => Carbon::parse($validated['start_time']), null, false);
         } elseif (! empty($validated['date'])) {
-            $dateStr = $validated['date'].' '.($validated['time'] ?? '00:00:00');
-            $scheduledAt = rescue(fn () => Carbon::parse($dateStr), null, false);
+            $dateStr = $validated['date'] . ' ' . ($validated['time'] ?? '00:00:00');
+            $scheduledAt = rescue(fn() => Carbon::parse($dateStr), null, false);
         }
 
         $roomName = Meeting::generateRoomName();
@@ -180,6 +193,10 @@ class MeetingController extends Controller
     public function getScheduled(Request $request): JsonResponse
     {
         $user = $request->user();
+
+        if ($user->isGuest()) {
+            return $this->successResponse([], 'Guests do not have meeting dashboard access');
+        }
 
         $meetings = Meeting::with('host:id,name,avatar_url')
             ->withCount('activeParticipants')
@@ -345,7 +362,7 @@ class MeetingController extends Controller
         }
 
         $user = $request->user();
-        $isHost = ($user->id === $meeting->host_id);
+        $isHost = (! $user->isGuest() && $user->id === $meeting->host_id);
 
         if (! $isHost && $meeting->is_locked) {
             return $this->errorResponse('This meeting has been locked by the host', 403);
@@ -418,7 +435,7 @@ class MeetingController extends Controller
 
         $user = $request->user();
 
-        if ($meeting->host_id !== $user->id && ! $user->isAdmin()) {
+        if ($user->isGuest() || ($meeting->host_id !== $user->id && ! $user->isAdmin())) {
             return $this->errorResponse('Only the host can end this meeting', 403);
         }
 
@@ -473,7 +490,7 @@ class MeetingController extends Controller
 
         $user = $request->user();
 
-        if ($meeting->host_id !== $user->id && ! $user->isAdmin()) {
+        if ($user->isGuest() || ($meeting->host_id !== $user->id && ! $user->isAdmin())) {
             return $this->errorResponse('Only the host can delete this meeting', 403);
         }
 
@@ -513,7 +530,7 @@ class MeetingController extends Controller
 
         // 9-digit formatted code (XXX-XXX-XXX)
         $formattedCode = (strlen($cleanDigits) === 9)
-            ? substr($cleanDigits, 0, 3).'-'.substr($cleanDigits, 3, 3).'-'.substr($cleanDigits, 6, 3)
+            ? substr($cleanDigits, 0, 3) . '-' . substr($cleanDigits, 3, 3) . '-' . substr($cleanDigits, 6, 3)
             : $rawInput;
 
         return Meeting::where('meeting_code', $rawInput)

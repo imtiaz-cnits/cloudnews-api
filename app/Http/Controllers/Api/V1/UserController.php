@@ -16,6 +16,9 @@ class UserController extends Controller
     public function index(Request $request): JsonResponse
     {
         $currentUser = $request->user('sanctum');
+        if ($currentUser && $currentUser->isGuest()) {
+            return $this->errorResponse('Guests do not have access to user directory', 403);
+        }
         $search = $request->query('search');
 
         $query = User::query()

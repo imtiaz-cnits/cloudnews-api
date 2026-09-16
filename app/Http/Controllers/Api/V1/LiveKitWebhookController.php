@@ -30,11 +30,11 @@ class LiveKitWebhookController extends Controller
         try {
             $eventData = $this->liveKitService->verifyWebhook($rawBody, $authHeader);
         } catch (InvalidArgumentException $e) {
-            Log::warning('LiveKit Webhook Verification Failed: '.$e->getMessage());
+            Log::warning('LiveKit Webhook Verification Failed: ' . $e->getMessage());
 
             return $this->errorResponse($e->getMessage(), 401);
         } catch (Throwable $e) {
-            Log::error('LiveKit Webhook Processing Exception: '.$e->getMessage());
+            Log::error('LiveKit Webhook Processing Exception: ' . $e->getMessage());
 
             return $this->errorResponse('Webhook processing failed', 400);
         }
