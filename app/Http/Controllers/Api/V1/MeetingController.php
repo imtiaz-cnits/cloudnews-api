@@ -139,7 +139,12 @@ class MeetingController extends Controller
             identity: $identity,
             name: $user->name,
             isHost: true,
-            role: 'host'
+            role: 'host',
+            metadata: [
+                'role' => 'host',
+                'is_host' => true,
+                'user_id' => $user->id,
+            ]
         );
 
         $meetingData = $meeting->toArray();
@@ -456,7 +461,13 @@ class MeetingController extends Controller
             identity: $identity,
             name: $user->name,
             isHost: $isHost,
-            role: $role
+            role: $role,
+            metadata: [
+                'role' => $role,
+                'is_host' => $isHost,
+                'user_id' => $user->id,
+                'is_guest' => (bool) $user->is_guest,
+            ]
         );
 
         return $this->successResponse([

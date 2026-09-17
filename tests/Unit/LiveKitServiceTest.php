@@ -72,4 +72,27 @@ class LiveKitServiceTest extends TestCase
         $this->assertTrue($video['canSubscribe']);
         $this->assertFalse($video['roomAdmin'] ?? false);
     }
+
+    public function test_token_includes_metadata_and_can_update_own_metadata(): void
+    {
+        $token = $this->service->generateJoinToken(
+            roomName: 'cloudnews-meta-room',
+            identity: 'host_10',
+            name: 'Room Leader',
+            isHost: true,
+            role: 'host',
+            metadata: ['role' => 'host', 'is_host' => true]
+        );
+
+        $secret = config('livekit.api_secret', 'secret_token_for_cloudnews_2026_32chars');
+        $decoded = JWT::decode($token, new Key($secret, 'HS256'));
+
+        $this->assertNotEmpty($decoded->metadata);
+        $meta = json_decode($decoded->metadata, true);
+        $this->assertEquals('host', $meta['role']);
+        $this->assertTrue($meta['is_host']);
+
+        $video = (array) $decoded->video;
+        $this->assertTrue($video['canUpdateOwnMetadata']);
+    }
 }

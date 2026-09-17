@@ -86,6 +86,7 @@ class LiveKitService
             ->setCanPublish($canPublish)
             ->setCanSubscribe(true)
             ->setCanPublishData(true)
+            ->setCanUpdateOwnMetadata(true)
             ->setRoomAdmin($isHost);
 
         $accessToken = new AccessToken($this->apiKey, $this->apiSecret, $tokenOptions);
