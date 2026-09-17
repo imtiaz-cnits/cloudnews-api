@@ -26,6 +26,7 @@ class CreateMeetingRequest extends FormRequest
             'title' => ['required', 'string', 'max:255'],
             'passcode' => ['nullable', 'string', 'max:32'],
             'max_participants' => ['nullable', 'integer', 'min:2', 'max:100'],
+            'meeting_code' => ['nullable', 'string', 'max:32'],
         ];
     }
 }

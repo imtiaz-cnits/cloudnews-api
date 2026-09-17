@@ -601,4 +601,42 @@ class MeetingTest extends TestCase
                 'success' => true,
             ]);
     }
+
+    public function test_host_can_start_and_restart_personal_meeting_room(): void
+    {
+        $host = User::factory()->create(['name' => 'Dr. Host']);
+        $pmiCode = '882-149';
+
+        // 1. First time starting personal room with 6-digit code
+        $res1 = $this->actingAs($host)->postJson('/api/v1/meetings', [
+            'title' => "Dr. Host's Personal Room",
+            'meeting_code' => $pmiCode,
+        ]);
+
+        $res1->assertStatus(201)
+            ->assertJsonPath('data.meeting_code', $pmiCode)
+            ->assertJsonPath('data.is_host', true);
+
+        // 2. Host ends the meeting
+        $resEnd = $this->actingAs($host)->postJson("/api/v1/meetings/{$pmiCode}/end");
+        $resEnd->assertStatus(200);
+
+        $dbMeeting = Meeting::where('meeting_code', $pmiCode)->first();
+        $this->assertFalse($dbMeeting->is_active);
+
+        // 3. Host starts personal room again -> should reactivate same meeting and code
+        $res2 = $this->actingAs($host)->postJson('/api/v1/meetings', [
+            'title' => "Dr. Host's Personal Room",
+            'meeting_code' => $pmiCode,
+        ]);
+
+        $res2->assertStatus(201)
+            ->assertJsonPath('data.meeting_code', $pmiCode)
+            ->assertJsonPath('data.meeting.id', $dbMeeting->id);
+
+        $dbMeeting->refresh();
+        $this->assertTrue($dbMeeting->is_active);
+        $this->assertNull($dbMeeting->ended_at);
+    }
 }
+

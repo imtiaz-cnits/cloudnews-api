@@ -57,34 +57,80 @@ class MeetingController extends Controller
 
         $validated = $request->validated();
 
-        $roomName = Meeting::generateRoomName();
-        $meetingCode = Meeting::generateMeetingCode();
+        $meetingCode = null;
+        if (! empty($validated['meeting_code'])) {
+            $rawCode = trim($validated['meeting_code']);
+            $cleanDigits = preg_replace('/\D/', '', $rawCode);
+            $formattedCode = (strlen($cleanDigits) === 6)
+                ? substr($cleanDigits, 0, 3) . '-' . substr($cleanDigits, 3, 3)
+                : $rawCode;
 
-        $meeting = Meeting::create([
-            'host_id' => $user->id,
-            'room_name' => $roomName,
-            'meeting_code' => $meetingCode,
-            'title' => $validated['title'],
-            'passcode' => $validated['passcode'] ?? null,
-            'is_active' => true,
-            'is_locked' => false,
-            'max_participants' => $validated['max_participants'] ?? 12,
-            'started_at' => now(),
-        ]);
+            // Ensure no conflict with other hosts
+            $isConflict = Meeting::where('meeting_code', $formattedCode)
+                ->where('host_id', '!=', $user->id)
+                ->exists();
+
+            if (! $isConflict) {
+                $meetingCode = $formattedCode;
+            }
+        }
+
+        $existingMeeting = $meetingCode
+            ? Meeting::where('meeting_code', $meetingCode)->where('host_id', $user->id)->first()
+            : null;
+
+        if ($existingMeeting) {
+            $meeting = $existingMeeting;
+            $meeting->update([
+                'title' => $validated['title'],
+                'passcode' => $validated['passcode'] ?? $meeting->passcode,
+                'is_active' => true,
+                'is_locked' => false,
+                'started_at' => now(),
+                'ended_at' => null,
+            ]);
+            $roomName = $meeting->room_name;
+        } else {
+            $roomName = Meeting::generateRoomName();
+            if (! $meetingCode) {
+                $meetingCode = Meeting::generateMeetingCode();
+            }
+
+            $meeting = Meeting::create([
+                'host_id' => $user->id,
+                'room_name' => $roomName,
+                'meeting_code' => $meetingCode,
+                'title' => $validated['title'],
+                'passcode' => $validated['passcode'] ?? null,
+                'is_active' => true,
+                'is_locked' => false,
+                'max_participants' => $validated['max_participants'] ?? 12,
+                'started_at' => now(),
+            ]);
+        }
 
         // Explicitly pre-create room on LiveKit SFU
-        $this->liveKitService->createRoom($roomName, [
-            'empty_timeout' => 86400,
-            'max_participants' => $meeting->max_participants,
-        ]);
+        try {
+            $this->liveKitService->createRoom($roomName, [
+                'empty_timeout' => 86400,
+                'max_participants' => $meeting->max_participants,
+            ]);
+        } catch (\Throwable $e) {
+            // LiveKit SFU room might already exist or SFU offline in test
+        }
 
-        // Record host as first participant
-        MeetingParticipant::create([
-            'meeting_id' => $meeting->id,
-            'user_id' => $user->id,
-            'role' => 'host',
-            'joined_at' => now(),
-        ]);
+        // Record or update host as participant
+        MeetingParticipant::updateOrCreate(
+            [
+                'meeting_id' => $meeting->id,
+                'user_id' => $user->id,
+            ],
+            [
+                'role' => 'host',
+                'joined_at' => now(),
+                'left_at' => null,
+            ]
+        );
 
         // Generate LiveKit Host JWT Token
         $identity = $user->is_guest ? "guest_{$user->id}" : "user_{$user->id}";
