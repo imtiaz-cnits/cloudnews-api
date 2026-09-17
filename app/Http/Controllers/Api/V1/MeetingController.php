@@ -155,7 +155,7 @@ class MeetingController extends Controller
             'room_name' => $roomName,
             'meeting_code' => $meetingCode,
             'title' => $validated['title'],
-            'passcode' => $validated['passcode'] ?? null,
+            'passcode' => ! empty($validated['passcode']) ? $validated['passcode'] : null,
             'is_active' => true,
             'is_locked' => false,
             'waiting_room' => $request->boolean('waiting_room'),
@@ -315,12 +315,17 @@ class MeetingController extends Controller
             if (empty($passcode)) {
                 return $this->errorResponse('Passcode is required to join this meeting', 422, [
                     'requires_passcode' => true,
+                    'meeting_code' => $meeting->meeting_code,
+                    'title' => $meeting->title,
                 ]);
             }
 
             if (! $meeting->verifyPasscode($passcode)) {
                 return $this->errorResponse('Invalid meeting passcode', 422, [
                     'invalid_passcode' => true,
+                    'requires_passcode' => true,
+                    'meeting_code' => $meeting->meeting_code,
+                    'title' => $meeting->title,
                 ]);
             }
         }

@@ -337,6 +337,104 @@ class MeetingTest extends TestCase
         ]);
     }
 
+    public function test_user_can_schedule_meeting_with_custom_options_and_verify_them(): void
+    {
+        $host = User::factory()->create();
+
+        // 1. Schedule with custom passcode and waiting room enabled
+        $response = $this->actingAs($host)->postJson('/api/v1/meetings/schedule', [
+            'title' => 'Quarterly Product Review',
+            'scheduled_at' => '2026-11-20 15:00:00',
+            'passcode' => '849201',
+            'waiting_room' => true,
+        ]);
+
+        $response->assertStatus(201)
+            ->assertJson([
+                'success' => true,
+                'data' => [
+                    'meeting' => [
+                        'title' => 'Quarterly Product Review',
+                        'passcode' => '849201',
+                        'requires_passcode' => true,
+                        'waiting_room' => true,
+                    ],
+                ],
+            ]);
+
+        $code = $response->json('data.meeting.meeting_code');
+
+        $dbMeeting = Meeting::where('meeting_code', $code)->first();
+        $this->assertNotNull($dbMeeting);
+        $this->assertEquals('849201', $dbMeeting->passcode);
+        $this->assertTrue($dbMeeting->waiting_room);
+        $this->assertDatabaseHas('meetings', [
+            'meeting_code' => $code,
+            'waiting_room' => true,
+        ]);
+
+        // 2. Validate endpoint should signal passcode is required
+        $validateMissing = $this->postJson('/api/v1/meetings/validate', [
+            'code' => $code,
+        ]);
+        $validateMissing->assertStatus(422)
+            ->assertJson([
+                'success' => false,
+                'errors' => [
+                    'requires_passcode' => true,
+                ],
+            ]);
+
+        // 3. Validate with correct passcode should succeed
+        $validateCorrect = $this->postJson('/api/v1/meetings/validate', [
+            'code' => $code,
+            'passcode' => '849201',
+        ]);
+        $validateCorrect->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'data' => [
+                    'valid' => true,
+                    'requires_passcode' => true,
+                ],
+            ]);
+
+        // 4. Schedule another meeting with passcode OFF and waiting room OFF
+        $responseOpen = $this->actingAs($host)->postJson('/api/v1/meetings/schedule', [
+            'title' => 'Open Town Hall',
+            'scheduled_at' => '2026-11-21 11:00:00',
+            'passcode' => null,
+            'waiting_room' => false,
+        ]);
+
+        $responseOpen->assertStatus(201)
+            ->assertJson([
+                'success' => true,
+                'data' => [
+                    'meeting' => [
+                        'title' => 'Open Town Hall',
+                        'requires_passcode' => false,
+                        'waiting_room' => false,
+                    ],
+                ],
+            ]);
+
+        // 5. Host scheduled meetings list should accurately return both
+        $scheduledList = $this->actingAs($host)->getJson('/api/v1/meetings/scheduled');
+        $scheduledList->assertStatus(200)
+            ->assertJsonFragment([
+                'title' => 'Quarterly Product Review',
+                'requires_passcode' => true,
+                'passcode' => '849201',
+                'waiting_room' => true,
+            ])
+            ->assertJsonFragment([
+                'title' => 'Open Town Hall',
+                'requires_passcode' => false,
+                'waiting_room' => false,
+            ]);
+    }
+
     public function test_user_can_get_scheduled_meetings(): void
     {
         $host = User::factory()->create();

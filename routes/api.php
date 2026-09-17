@@ -25,6 +25,11 @@ Route::prefix('v1')->group(function () {
     // Meeting Pre-validation (accessible before joining)
     Route::post('/meetings/validate', [MeetingController::class, 'validateMeeting']);
 
+    // Authenticated User Profile Routes
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::put('/users/profile', [UserController::class, 'updateProfile']);
+    });
+
     // Authenticated Meeting Routes
     Route::middleware('auth:sanctum')->prefix('meetings')->group(function () {
         Route::get('/', [MeetingController::class, 'index']);
@@ -47,6 +52,7 @@ Route::get('/users', [UserController::class, 'index']);
 Route::post('/meetings/validate', [MeetingController::class, 'validateMeeting']);
 
 Route::middleware('auth:sanctum')->group(function () {
+    Route::put('/users/profile', [UserController::class, 'updateProfile']);
     Route::post('/meetings/schedule', [MeetingController::class, 'schedule']);
     Route::get('/meetings/scheduled', [MeetingController::class, 'getScheduled']);
     Route::get('/meetings', [MeetingController::class, 'index']);

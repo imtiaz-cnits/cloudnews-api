@@ -69,4 +69,38 @@ class UserController extends Controller
 
         return $this->successResponse($users, 'Users retrieved successfully');
     }
+
+    /**
+     * Update current authenticated user's profile (name, avatar_url).
+     */
+    public function updateProfile(Request $request): JsonResponse
+    {
+        $currentUser = $request->user('sanctum');
+        if (! $currentUser) {
+            return $this->errorResponse('Unauthenticated', 401);
+        }
+
+        $validated = $request->validate([
+            'name' => 'nullable|string|max:100',
+            'avatar_url' => 'nullable|string',
+        ]);
+
+        if (isset($validated['name']) && ! empty(trim($validated['name']))) {
+            $currentUser->name = trim($validated['name']);
+        }
+
+        if (array_key_exists('avatar_url', $validated)) {
+            $currentUser->avatar_url = $validated['avatar_url'];
+        }
+
+        $currentUser->save();
+
+        return $this->successResponse([
+            'id' => $currentUser->id,
+            'name' => $currentUser->name,
+            'username' => $currentUser->username,
+            'email' => $currentUser->email,
+            'avatar_url' => $currentUser->avatar_url,
+        ], 'Profile updated successfully');
+    }
 }
