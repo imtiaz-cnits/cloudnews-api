@@ -638,5 +638,31 @@ class MeetingTest extends TestCase
         $this->assertTrue($dbMeeting->is_active);
         $this->assertNull($dbMeeting->ended_at);
     }
+
+    public function test_web_room_deep_link_gateway(): void
+    {
+        $meeting = Meeting::factory()->create([
+            'meeting_code' => '801-285',
+            'title' => 'Important Architecture Meet',
+        ]);
+
+        $response = $this->get('/room/801-285');
+        $response->assertStatus(200);
+        $response->assertSee('801-285');
+        $response->assertSee('Important Architecture Meet');
+        $response->assertSee('cloudnews://room/801-285');
+        $response->assertSee('com.cloudnews.mobile');
+    }
+
+    public function test_asset_links_endpoint(): void
+    {
+        $response = $this->get('/.well-known/assetlinks.json');
+        $response->assertStatus(200);
+        $response->assertHeader('Content-Type', 'application/json');
+        $response->assertJsonFragment([
+            'package_name' => 'com.cloudnews.mobile',
+        ]);
+    }
 }
+
 

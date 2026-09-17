@@ -4,10 +4,16 @@ use App\Http\Controllers\AdminAuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\HostController;
 use App\Http\Controllers\LandingController;
+use App\Http\Controllers\MeetingJoinWebController;
 use Illuminate\Support\Facades\Route;
 
 // Public Landing Page
 Route::get('/', [LandingController::class, 'index'])->name('home');
+
+// Deep Link Meeting Gateway & Android App Links (WhatsApp, Facebook, Messenger integration)
+Route::get('/room/{meetingCode}', [MeetingJoinWebController::class, 'join'])->name('meeting.web.join');
+Route::get('/join/{meetingCode?}', [MeetingJoinWebController::class, 'join'])->name('meeting.web.join_alias');
+Route::get('/.well-known/assetlinks.json', [MeetingJoinWebController::class, 'assetLinks'])->name('meeting.web.assetlinks');
 
 // Guest Authentication Routes
 Route::middleware('guest')->group(function () {
