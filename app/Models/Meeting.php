@@ -65,13 +65,13 @@ class Meeting extends Model
     }
 
     /**
-     * Generate a unique human-readable 9-digit meeting code formatted as XXX-XXX-XXX.
+     * Generate a unique human-readable 6-digit meeting code formatted as XXX-XXX.
      */
     public static function generateMeetingCode(): string
     {
         do {
-            $digits = str_pad((string) random_int(100000000, 999999999), 9, '0', STR_PAD_LEFT);
-            $formatted = substr($digits, 0, 3).'-'.substr($digits, 3, 3).'-'.substr($digits, 6, 3);
+            $digits = str_pad((string) random_int(100000, 999999), 6, '0', STR_PAD_LEFT);
+            $formatted = substr($digits, 0, 3).'-'.substr($digits, 3, 3);
         } while (static::where('meeting_code', $formatted)->exists());
 
         return $formatted;

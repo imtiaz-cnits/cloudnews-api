@@ -57,7 +57,7 @@ class MeetingTest extends TestCase
             ]);
 
         $meetingCode = $response->json('data.meeting.meeting_code');
-        $this->assertMatchesRegularExpression('/^\d{3}-\d{3}-\d{3}$/', $meetingCode);
+        $this->assertMatchesRegularExpression('/^\d{3}-\d{3}$/', $meetingCode);
 
         // Verify encrypted at rest in database
         $rawDb = DB::table('meetings')->where('meeting_code', $meetingCode)->first();

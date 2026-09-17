@@ -533,10 +533,12 @@ class MeetingController extends Controller
         // Clean digits
         $cleanDigits = preg_replace('/\D/', '', $rawInput);
 
-        // 9-digit formatted code (XXX-XXX-XXX)
-        $formattedCode = (strlen($cleanDigits) === 9)
-            ? substr($cleanDigits, 0, 3) . '-' . substr($cleanDigits, 3, 3) . '-' . substr($cleanDigits, 6, 3)
-            : $rawInput;
+        // 6-digit formatted code (XXX-XXX) or legacy 9-digit (XXX-XXX-XXX)
+        $formattedCode = (strlen($cleanDigits) === 6)
+            ? substr($cleanDigits, 0, 3) . '-' . substr($cleanDigits, 3, 3)
+            : ((strlen($cleanDigits) === 9)
+                ? substr($cleanDigits, 0, 3) . '-' . substr($cleanDigits, 3, 3) . '-' . substr($cleanDigits, 6, 3)
+                : $rawInput);
 
         return Meeting::where('meeting_code', $rawInput)
             ->orWhere('meeting_code', $formattedCode)
