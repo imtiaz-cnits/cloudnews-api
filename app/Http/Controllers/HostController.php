@@ -112,6 +112,8 @@ class HostController extends Controller
             'name' => $validated['name'],
             'username' => $validated['username'] ?? null,
             'email' => $validated['email'],
+            'role' => 'host',
+            'is_guest' => false,
         ];
 
         if (! empty($validated['password'])) {

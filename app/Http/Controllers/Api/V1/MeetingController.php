@@ -26,7 +26,7 @@ class MeetingController extends Controller
     {
         $user = $request->user();
 
-        if ($user->isGuest()) {
+        if ($user->isGuest() && ! in_array($user->role, ['host', 'admin'], true)) {
             return $this->successResponse([], 'Guests do not have meeting dashboard access');
         }
 
@@ -51,7 +51,12 @@ class MeetingController extends Controller
     {
         $user = $request->user();
 
-        if ($user->isGuest()) {
+        if (in_array($user->role, ['host', 'admin'], true) || $user->isHost()) {
+            if ($user->is_guest) {
+                $user->is_guest = false;
+                $user->save();
+            }
+        } elseif ($user->isGuest()) {
             return $this->errorResponse('Guests are not permitted to create or host meetings. Please log in.', 403);
         }
 
@@ -173,7 +178,12 @@ class MeetingController extends Controller
     {
         $user = $request->user();
 
-        if ($user->isGuest()) {
+        if (in_array($user->role, ['host', 'admin'], true) || $user->isHost()) {
+            if ($user->is_guest) {
+                $user->is_guest = false;
+                $user->save();
+            }
+        } elseif ($user->isGuest()) {
             return $this->errorResponse('Guests are not permitted to schedule meetings. Please log in.', 403);
         }
 
@@ -245,7 +255,7 @@ class MeetingController extends Controller
     {
         $user = $request->user();
 
-        if ($user->isGuest()) {
+        if ($user->isGuest() && ! in_array($user->role, ['host', 'admin'], true)) {
             return $this->successResponse([], 'Guests do not have meeting dashboard access');
         }
 

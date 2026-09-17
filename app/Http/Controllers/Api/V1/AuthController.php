@@ -52,6 +52,15 @@ class AuthController extends Controller
             return $this->errorResponse('Invalid email or password', 401);
         }
 
+        // When authenticating with valid credentials, ensure account is not marked as guest
+        if ($user->is_guest) {
+            $user->is_guest = false;
+            if ($user->role === 'guest') {
+                $user->role = 'host';
+            }
+            $user->save();
+        }
+
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return $this->successResponse([

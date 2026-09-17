@@ -72,7 +72,7 @@ class User extends Authenticatable
      */
     public function isHost(): bool
     {
-        return $this->role === 'host';
+        return in_array($this->role, ['host', 'admin'], true) || (! (bool) $this->is_guest && $this->role !== 'guest');
     }
 
     /**
@@ -80,6 +80,10 @@ class User extends Authenticatable
      */
     public function isGuest(): bool
     {
+        if (in_array($this->role, ['host', 'admin'], true)) {
+            return false;
+        }
+
         return $this->role === 'guest' || (bool) $this->is_guest;
     }
 
