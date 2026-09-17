@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\LiveKitWebhookController;
 use App\Http\Controllers\Api\V1\MeetingController;
+use App\Http\Controllers\Api\V1\MeetingFileController;
 use App\Http\Controllers\Api\V1\UserController;
 use Illuminate\Support\Facades\Route;
 
@@ -41,6 +42,8 @@ Route::prefix('v1')->group(function () {
         Route::post('/{meeting_code}/join', [MeetingController::class, 'join']);
         Route::post('/{meeting_code}/end', [MeetingController::class, 'end']);
         Route::post('/{meeting_code}/leave', [MeetingController::class, 'leave']);
+        Route::post('/{meeting_code}/files', [MeetingFileController::class, 'upload']);
+        Route::get('/files/download/{meeting_code}/{filename}', [MeetingFileController::class, 'download']);
     });
 
     // LiveKit SFU Webhooks
@@ -50,6 +53,7 @@ Route::prefix('v1')->group(function () {
 // Support direct routes without v1 prefix (e.g. /api/users, /api/meetings/scheduled, /api/meetings/validate, /api/meetings/{code})
 Route::get('/users', [UserController::class, 'index']);
 Route::post('/meetings/validate', [MeetingController::class, 'validateMeeting']);
+Route::get('/files/download/{meeting_code}/{filename}', [MeetingFileController::class, 'download']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::put('/users/profile', [UserController::class, 'updateProfile']);
@@ -62,4 +66,5 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/meetings/{meeting_code}/join', [MeetingController::class, 'join']);
     Route::post('/meetings/{meeting_code}/end', [MeetingController::class, 'end']);
     Route::post('/meetings/{meeting_code}/leave', [MeetingController::class, 'leave']);
+    Route::post('/meetings/{meeting_code}/files', [MeetingFileController::class, 'upload']);
 });
