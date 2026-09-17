@@ -61,6 +61,11 @@ class MeetingFileController extends Controller
         // Generate full download URL
         // Prefer explicit APP_URL or root URL to guarantee reachable link from Mainland China
         $baseUrl = rtrim(config('app.url') ?: $request->root(), '/');
+        // Remove internal development/reverse-proxy ports like :8000 from public URLs
+        $baseUrl = preg_replace('/:(8000|8080)$/', '', $baseUrl);
+        if (str_contains($baseUrl, 'cloudnewsmeet.com')) {
+            $baseUrl = 'https://api.cloudnewsmeet.com';
+        }
         $fileUrl = $baseUrl . '/storage/' . $path;
 
         // Human readable formatted size
