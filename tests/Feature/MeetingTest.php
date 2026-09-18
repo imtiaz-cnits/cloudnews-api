@@ -302,6 +302,54 @@ class MeetingTest extends TestCase
         ]);
     }
 
+    public function test_host_leaving_meeting_auto_ends_meeting_for_everyone(): void
+    {
+        $host = User::factory()->create();
+        $participant = User::factory()->create();
+
+        $meeting = Meeting::factory()->create([
+            'host_id' => $host->id,
+            'is_active' => true,
+            'ended_at' => null,
+        ]);
+
+        MeetingParticipant::create([
+            'meeting_id' => $meeting->id,
+            'user_id' => $host->id,
+            'role' => 'host',
+            'joined_at' => now(),
+            'left_at' => null,
+        ]);
+
+        MeetingParticipant::create([
+            'meeting_id' => $meeting->id,
+            'user_id' => $participant->id,
+            'role' => 'participant',
+            'joined_at' => now(),
+            'left_at' => null,
+        ]);
+
+        $response = $this->actingAs($host)->postJson("/api/v1/meetings/{$meeting->meeting_code}/leave");
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'data' => [
+                    'meeting_ended' => true,
+                ],
+            ]);
+
+        $this->assertDatabaseHas('meetings', [
+            'id' => $meeting->id,
+            'is_active' => false,
+        ]);
+
+        $this->assertDatabaseMissing('meeting_participants', [
+            'meeting_id' => $meeting->id,
+            'left_at' => null,
+        ]);
+    }
+
     public function test_user_can_schedule_meeting(): void
     {
         $host = User::factory()->create();

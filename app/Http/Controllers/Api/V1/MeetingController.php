@@ -536,6 +536,26 @@ class MeetingController extends Controller
             ->whereNull('left_at')
             ->update(['left_at' => now()]);
 
+        // If host leaves, automatically end meeting for everyone and delete SFU room
+        if (! $user->isGuest() && $meeting->host_id === $user->id) {
+            $meeting->update([
+                'is_active' => false,
+                'ended_at' => now(),
+            ]);
+
+            MeetingParticipant::where('meeting_id', $meeting->id)
+                ->whereNull('left_at')
+                ->update(['left_at' => now()]);
+
+            try {
+                $this->liveKitService->deleteRoom($meeting->room_name);
+            } catch (\Throwable $e) {
+                // Ignore if room already closed
+            }
+
+            return $this->successResponse(['meeting_ended' => true], 'Host left, meeting ended successfully');
+        }
+
         return $this->successResponse(null, 'Left meeting successfully');
     }
 

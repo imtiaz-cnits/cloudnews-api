@@ -126,6 +126,24 @@ class LiveKitWebhookController extends Controller
             ->where('user_id', $user->id)
             ->whereNull('left_at')
             ->update(['left_at' => now()]);
+
+        // If the participant who left is the host, auto-terminate meeting
+        if ($user->id === $meeting->host_id) {
+            $meeting->update([
+                'is_active' => false,
+                'ended_at' => now(),
+            ]);
+
+            MeetingParticipant::where('meeting_id', $meeting->id)
+                ->whereNull('left_at')
+                ->update(['left_at' => now()]);
+
+            try {
+                $this->liveKitService->deleteRoom($meeting->room_name);
+            } catch (\Throwable $e) {
+                // Ignore if room already closed
+            }
+        }
     }
 
     /**
