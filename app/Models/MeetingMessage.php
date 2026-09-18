@@ -14,6 +14,7 @@ class MeetingMessage extends Model
         'meeting_id',
         'meeting_code',
         'user_id',
+        'client_msg_id',
         'sender_name',
         'type',
         'text',
@@ -27,6 +28,39 @@ class MeetingMessage extends Model
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
+
+    protected $appends = [
+        'sender_id',
+        'message',
+        'file_url',
+        'file_type',
+        'timestamp',
+    ];
+
+    public function getSenderIdAttribute()
+    {
+        return $this->user_id;
+    }
+
+    public function getMessageAttribute()
+    {
+        return $this->text;
+    }
+
+    public function getFileUrlAttribute()
+    {
+        return $this->media_url;
+    }
+
+    public function getFileTypeAttribute()
+    {
+        return $this->type;
+    }
+
+    public function getTimestampAttribute()
+    {
+        return $this->created_at?->toISOString() ?? $this->created_at;
+    }
 
     public function meeting(): BelongsTo
     {

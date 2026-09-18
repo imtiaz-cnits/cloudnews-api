@@ -854,5 +854,3 @@ class MeetingTest extends TestCase
             ]);
     }
 }
-
-

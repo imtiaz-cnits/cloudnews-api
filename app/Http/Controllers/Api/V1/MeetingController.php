@@ -12,6 +12,7 @@ use App\Services\LiveKitService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class MeetingController extends Controller
 {
@@ -62,7 +63,7 @@ class MeetingController extends Controller
             $rawCode = trim($validated['meeting_code']);
             $cleanDigits = preg_replace('/\D/', '', $rawCode);
             $formattedCode = (strlen($cleanDigits) === 6)
-                ? substr($cleanDigits, 0, 3) . '-' . substr($cleanDigits, 3, 3)
+                ? substr($cleanDigits, 0, 3).'-'.substr($cleanDigits, 3, 3)
                 : $rawCode;
 
             // Ensure no conflict with other hosts
@@ -195,12 +196,12 @@ class MeetingController extends Controller
 
         $scheduledAt = null;
         if (! empty($validated['scheduled_at'])) {
-            $scheduledAt = rescue(fn() => Carbon::parse($validated['scheduled_at']), null, false);
+            $scheduledAt = rescue(fn () => Carbon::parse($validated['scheduled_at']), null, false);
         } elseif (! empty($validated['start_time'])) {
-            $scheduledAt = rescue(fn() => Carbon::parse($validated['start_time']), null, false);
+            $scheduledAt = rescue(fn () => Carbon::parse($validated['start_time']), null, false);
         } elseif (! empty($validated['date'])) {
-            $dateStr = $validated['date'] . ' ' . ($validated['time'] ?? '00:00:00');
-            $scheduledAt = rescue(fn() => Carbon::parse($dateStr), null, false);
+            $dateStr = $validated['date'].' '.($validated['time'] ?? '00:00:00');
+            $scheduledAt = rescue(fn () => Carbon::parse($dateStr), null, false);
         }
 
         $roomName = Meeting::generateRoomName();
@@ -600,7 +601,7 @@ class MeetingController extends Controller
         try {
             $this->liveKitService->removeParticipant($meeting->room_name, $identity);
         } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::warning('Failed to remove participant on LiveKit SFU: ' . $e->getMessage());
+            Log::warning('Failed to remove participant on LiveKit SFU: '.$e->getMessage());
         }
 
         return $this->successResponse(null, 'Participant removed successfully');
@@ -659,9 +660,9 @@ class MeetingController extends Controller
 
         // 6-digit formatted code (XXX-XXX) or legacy 9-digit (XXX-XXX-XXX)
         $formattedCode = (strlen($cleanDigits) === 6)
-            ? substr($cleanDigits, 0, 3) . '-' . substr($cleanDigits, 3, 3)
+            ? substr($cleanDigits, 0, 3).'-'.substr($cleanDigits, 3, 3)
             : ((strlen($cleanDigits) === 9)
-                ? substr($cleanDigits, 0, 3) . '-' . substr($cleanDigits, 3, 3) . '-' . substr($cleanDigits, 6, 3)
+                ? substr($cleanDigits, 0, 3).'-'.substr($cleanDigits, 3, 3).'-'.substr($cleanDigits, 6, 3)
                 : $rawInput);
 
         return Meeting::where('meeting_code', $rawInput)

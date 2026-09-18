@@ -2,9 +2,9 @@
 
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\LiveKitWebhookController;
+use App\Http\Controllers\Api\V1\MeetingChatController;
 use App\Http\Controllers\Api\V1\MeetingController;
 use App\Http\Controllers\Api\V1\MeetingFileController;
-use App\Http\Controllers\Api\V1\MeetingMessageController;
 use App\Http\Controllers\Api\V1\UserController;
 use App\Http\Controllers\MeetingJoinWebController;
 use Illuminate\Support\Facades\Route;
@@ -49,9 +49,13 @@ Route::prefix('v1')->group(function () {
         Route::post('/{meeting_code}/participants/remove', [MeetingController::class, 'removeParticipant']);
         Route::post('/{meeting_code}/files', [MeetingFileController::class, 'upload']);
         Route::get('/files/download/{meeting_code}/{filename}', [MeetingFileController::class, 'download']);
-        Route::get('/{meeting_code}/messages', [MeetingMessageController::class, 'index']);
-        Route::post('/{meeting_code}/messages', [MeetingMessageController::class, 'store']);
+        Route::get('/{meeting_code}/messages', [MeetingChatController::class, 'index']);
+        Route::post('/{meeting_code}/messages', [MeetingChatController::class, 'store']);
     });
+
+    // Public / Guest in-meeting chat access (allows guests or rejoiners to fetch and post messages)
+    Route::get('/meetings/{meeting_code}/messages', [MeetingChatController::class, 'index']);
+    Route::post('/meetings/{meeting_code}/messages', [MeetingChatController::class, 'store']);
 
     // LiveKit SFU Webhooks
     Route::post('/webhooks/livekit', [LiveKitWebhookController::class, 'handle']);
@@ -64,6 +68,8 @@ Route::get('/files/download/{meeting_code}/{filename}', [MeetingFileController::
 Route::get('/room/{meetingCode}', [MeetingJoinWebController::class, 'join'])->name('api.meeting.web.join');
 Route::get('/join/{meetingCode?}', [MeetingJoinWebController::class, 'join'])->name('api.meeting.web.join_alias');
 Route::get('/.well-known/assetlinks.json', [MeetingJoinWebController::class, 'assetLinks'])->name('api.meeting.web.assetlinks');
+Route::get('/meetings/{meeting_code}/messages', [MeetingChatController::class, 'index']);
+Route::post('/meetings/{meeting_code}/messages', [MeetingChatController::class, 'store']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::put('/users/profile', [UserController::class, 'updateProfile']);
@@ -78,6 +84,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/meetings/{meeting_code}/leave', [MeetingController::class, 'leave']);
     Route::post('/meetings/{meeting_code}/participants/remove', [MeetingController::class, 'removeParticipant']);
     Route::post('/meetings/{meeting_code}/files', [MeetingFileController::class, 'upload']);
-    Route::get('/meetings/{meeting_code}/messages', [MeetingMessageController::class, 'index']);
-    Route::post('/meetings/{meeting_code}/messages', [MeetingMessageController::class, 'store']);
+    Route::get('/meetings/{meeting_code}/messages', [MeetingChatController::class, 'index']);
+    Route::post('/meetings/{meeting_code}/messages', [MeetingChatController::class, 'store']);
 });

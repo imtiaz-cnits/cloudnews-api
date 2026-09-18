@@ -22,7 +22,7 @@ class MeetingFileController extends Controller
         ]);
 
         $uploadedFile = $request->file('file');
-        if (!$uploadedFile || !$uploadedFile->isValid()) {
+        if (! $uploadedFile || ! $uploadedFile->isValid()) {
             return $this->errorResponse('Invalid or corrupted file upload.', 422);
         }
 
@@ -33,7 +33,7 @@ class MeetingFileController extends Controller
 
         // Categorize file if not provided
         $category = $request->input('category');
-        if (!$category) {
+        if (! $category) {
             if (str_starts_with($mimeType, 'image/')) {
                 $category = 'image';
             } elseif (str_starts_with($mimeType, 'video/')) {
@@ -51,10 +51,10 @@ class MeetingFileController extends Controller
         $storageFilename = sprintf('%s_%s.%s', $safeSlug, Str::random(8), $extension);
 
         // Store file under public storage disk
-        $directory = 'meeting-files/' . preg_replace('/[^a-zA-Z0-9_\-]/', '', $meeting_code);
+        $directory = 'meeting-files/'.preg_replace('/[^a-zA-Z0-9_\-]/', '', $meeting_code);
         $path = $uploadedFile->storeAs($directory, $storageFilename, 'public');
 
-        if (!$path) {
+        if (! $path) {
             return $this->errorResponse('Failed to store file on server.', 500);
         }
 
@@ -66,7 +66,7 @@ class MeetingFileController extends Controller
         if (str_contains($baseUrl, 'cloudnewsmeet.com')) {
             $baseUrl = 'https://api.cloudnewsmeet.com';
         }
-        $fileUrl = $baseUrl . '/storage/' . $path;
+        $fileUrl = $baseUrl.'/storage/'.$path;
 
         // Human readable formatted size
         $formattedSize = $this->formatBytes($fileSizeBytes);
@@ -90,9 +90,9 @@ class MeetingFileController extends Controller
     {
         $safeCode = preg_replace('/[^a-zA-Z0-9_\-]/', '', $meeting_code);
         $safeFilename = basename($filename);
-        $relativePath = 'meeting-files/' . $safeCode . '/' . $safeFilename;
+        $relativePath = 'meeting-files/'.$safeCode.'/'.$safeFilename;
 
-        if (!Storage::disk('public')->exists($relativePath)) {
+        if (! Storage::disk('public')->exists($relativePath)) {
             abort(404, 'File not found');
         }
 
@@ -104,10 +104,13 @@ class MeetingFileController extends Controller
      */
     private function formatBytes(int $bytes, int $precision = 1): string
     {
-        if ($bytes <= 0) return '0 B';
+        if ($bytes <= 0) {
+            return '0 B';
+        }
         $units = ['B', 'KB', 'MB', 'GB'];
         $power = min((int) floor(log($bytes, 1024)), count($units) - 1);
         $value = $bytes / pow(1024, $power);
-        return round($value, $precision) . ' ' . $units[$power];
+
+        return round($value, $precision).' '.$units[$power];
     }
 }

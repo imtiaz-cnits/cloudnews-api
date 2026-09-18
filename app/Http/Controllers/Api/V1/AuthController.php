@@ -78,7 +78,7 @@ class AuthController extends Controller
         $deviceId = $validated['device_id'] ?? null;
 
         $guestUser = null;
-        if (!empty($deviceId)) {
+        if (! empty($deviceId)) {
             $guestUser = User::where('username', "guest_{$deviceId}")
                 ->where('is_guest', true)
                 ->first();
@@ -92,7 +92,7 @@ class AuthController extends Controller
         } else {
             $guestUser = User::create([
                 'name' => $validated['name'],
-                'username' => !empty($deviceId) ? "guest_{$deviceId}" : null,
+                'username' => ! empty($deviceId) ? "guest_{$deviceId}" : null,
                 'avatar_url' => $validated['avatar_url'] ?? null,
                 'is_guest' => true,
             ]);

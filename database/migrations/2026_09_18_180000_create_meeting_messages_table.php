@@ -23,6 +23,7 @@ return new class extends Migration
             $table->string('file_size')->nullable();
             $table->text('media_url')->nullable();
             $table->string('duration')->nullable();
+            $table->string('client_msg_id')->nullable()->index();
             $table->timestamps();
 
             $table->index(['meeting_id', 'created_at']);

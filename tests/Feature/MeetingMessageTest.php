@@ -111,4 +111,60 @@ class MeetingMessageTest extends TestCase
 
         $this->assertDatabaseCount('meeting_messages', 0);
     }
+
+    public function test_meeting_chat_controller_endpoints_with_aliases_and_numeric_id(): void
+    {
+        $host = User::factory()->create(['name' => 'Host Lead']);
+        $meeting = Meeting::factory()->create([
+            'host_id' => $host->id,
+            'meeting_code' => '999-888',
+            'room_name' => 'cloudnews-room999',
+            'is_active' => true,
+        ]);
+
+        // 1. Post using sender_id, message, file_url, file_type, client_msg_id to numeric ID
+        $postRes = $this->actingAs($host)->postJson("/api/v1/meetings/{$meeting->id}/messages", [
+            'sender_id' => $host->id,
+            'sender_name' => 'Host Lead',
+            'message' => 'Quarterly report presentation file',
+            'file_url' => 'https://example.com/files/report.pdf',
+            'file_type' => 'document',
+            'file_name' => 'report.pdf',
+            'file_size' => '1.2 MB',
+            'client_msg_id' => 'client-uuid-12345',
+        ]);
+
+        $postRes->assertStatus(201)
+            ->assertJson([
+                'success' => true,
+                'data' => [
+                    'sender_name' => 'Host Lead',
+                    'message' => 'Quarterly report presentation file',
+                    'text' => 'Quarterly report presentation file',
+                    'file_url' => 'https://example.com/files/report.pdf',
+                    'file_type' => 'document',
+                    'type' => 'document',
+                    'client_msg_id' => 'client-uuid-12345',
+                ],
+            ]);
+
+        // 2. Fetch using meeting_code without dash as a guest
+        $getRes = $this->getJson('/api/v1/meetings/999888/messages');
+        $getRes->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+            ]);
+
+        $data = $getRes->json('data');
+        $this->assertCount(1, $data);
+        $this->assertEquals('Quarterly report presentation file', $data[0]['message']);
+        $this->assertEquals('https://example.com/files/report.pdf', $data[0]['file_url']);
+        $this->assertEquals('client-uuid-12345', $data[0]['client_msg_id']);
+        $this->assertNotNull($data[0]['timestamp']);
+
+        // 3. Fetch using room_name
+        $getRoomRes = $this->getJson('/api/v1/meetings/cloudnews-room999/messages');
+        $getRoomRes->assertStatus(200);
+        $this->assertCount(1, $getRoomRes->json('data'));
+    }
 }
