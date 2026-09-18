@@ -75,13 +75,30 @@ class AuthController extends Controller
     public function guest(GuestLoginRequest $request): JsonResponse
     {
         $validated = $request->validated();
+        $deviceId = $validated['device_id'] ?? null;
 
-        $guestUser = User::create([
-            'name' => $validated['name'],
-            'avatar_url' => $validated['avatar_url'] ?? null,
-            'is_guest' => true,
-        ]);
+        $guestUser = null;
+        if (!empty($deviceId)) {
+            $guestUser = User::where('username', "guest_{$deviceId}")
+                ->where('is_guest', true)
+                ->first();
+        }
 
+        if ($guestUser) {
+            $guestUser->update([
+                'name' => $validated['name'],
+                'avatar_url' => $validated['avatar_url'] ?? $guestUser->avatar_url,
+            ]);
+        } else {
+            $guestUser = User::create([
+                'name' => $validated['name'],
+                'username' => !empty($deviceId) ? "guest_{$deviceId}" : null,
+                'avatar_url' => $validated['avatar_url'] ?? null,
+                'is_guest' => true,
+            ]);
+        }
+
+        $guestUser->tokens()->delete();
         $token = $guestUser->createToken('guest_token')->plainTextToken;
 
         return $this->successResponse([

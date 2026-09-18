@@ -25,6 +25,7 @@ class GuestLoginRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'min:2', 'max:100'],
             'avatar_url' => ['nullable', 'string', 'url', 'max:2048'],
+            'device_id' => ['nullable', 'string', 'max:128'],
         ];
     }
 }
