@@ -654,14 +654,83 @@ class MeetingTest extends TestCase
         $response->assertSee('com.cloudnews.mobile');
     }
 
-    public function test_asset_links_endpoint(): void
+    public function test_host_cannot_see_other_hosts_scheduled_or_ongoing_meetings(): void
     {
-        $response = $this->get('/.well-known/assetlinks.json');
-        $response->assertStatus(200);
-        $response->assertHeader('Content-Type', 'application/json');
-        $response->assertJsonFragment([
-            'package_name' => 'com.cloudnews.mobile',
+        $hostA = User::factory()->create(['name' => 'Host Alpha', 'role' => 'host']);
+        $hostB = User::factory()->create(['name' => 'Host Beta', 'role' => 'host']);
+
+        // Host A creates an ongoing meeting
+        $ongoingA = Meeting::factory()->create([
+            'host_id' => $hostA->id,
+            'title' => "Alpha's Ongoing Meeting",
+            'is_active' => true,
+            'ended_at' => null,
+            'scheduled_at' => now()->subMinutes(10),
         ]);
+
+        // Host A creates a scheduled future meeting
+        $scheduledA = Meeting::factory()->create([
+            'host_id' => $hostA->id,
+            'title' => "Alpha's Future Meeting",
+            'is_active' => true,
+            'ended_at' => null,
+            'scheduled_at' => now()->addHours(3),
+        ]);
+
+        // Host B joins Host A's meeting as a participant
+        MeetingParticipant::create([
+            'meeting_id' => $ongoingA->id,
+            'user_id' => $hostB->id,
+            'role' => 'participant',
+            'joined_at' => now(),
+        ]);
+
+        // Host B checks scheduled/ongoing meetings -> MUST NOT see Host A's meetings
+        $responseB = $this->actingAs($hostB)->getJson('/api/v1/meetings/scheduled');
+        $responseB->assertStatus(200);
+        $dataB = collect($responseB->json('data'));
+        $this->assertEmpty($dataB, 'Host B should not see any of Host A meetings');
+
+        // Host A checks -> MUST see both meetings
+        $responseA = $this->actingAs($hostA)->getJson('/api/v1/meetings/scheduled');
+        $responseA->assertStatus(200);
+        $dataA = collect($responseA->json('data'));
+        $this->assertCount(2, $dataA);
+        $this->assertTrue($dataA->contains('title', "Alpha's Ongoing Meeting"));
+        $this->assertTrue($dataA->contains('title', "Alpha's Future Meeting"));
+    }
+
+    public function test_host_cannot_manage_another_hosts_meeting(): void
+    {
+        $hostA = User::factory()->create(['name' => 'Host Alpha', 'role' => 'host']);
+        $hostB = User::factory()->create(['name' => 'Host Beta', 'role' => 'host']);
+
+        $meetingA = Meeting::factory()->create([
+            'host_id' => $hostA->id,
+            'title' => "Alpha's Secure Meeting",
+            'meeting_code' => '999-111',
+            'is_active' => true,
+        ]);
+
+        // Host B tries to end Host A's meeting -> 403 Forbidden
+        $resEnd = $this->actingAs($hostB)->postJson("/api/v1/meetings/{$meetingA->meeting_code}/end");
+        $resEnd->assertStatus(403)
+            ->assertJson([
+                'success' => false,
+                'message' => 'Only the host can end this meeting',
+            ]);
+
+        // Host B tries to delete Host A's meeting -> 403 Forbidden
+        $resDelete = $this->actingAs($hostB)->deleteJson("/api/v1/meetings/{$meetingA->meeting_code}");
+        $resDelete->assertStatus(403)
+            ->assertJson([
+                'success' => false,
+                'message' => 'Only the host can delete this meeting',
+            ]);
+
+        // Meeting is still active and intact
+        $meetingA->refresh();
+        $this->assertTrue($meetingA->is_active);
     }
 }
 

@@ -32,12 +32,7 @@ class MeetingController extends Controller
 
         $meetings = Meeting::with('host:id,name,avatar_url')
             ->withCount('activeParticipants')
-            ->where(function ($query) use ($user) {
-                $query->where('host_id', $user->id)
-                    ->orWhereHas('participants', function ($pQuery) use ($user) {
-                        $pQuery->where('user_id', $user->id);
-                    });
-            })
+            ->where('host_id', $user->id)
             ->latest()
             ->paginate(15);
 
@@ -261,12 +256,7 @@ class MeetingController extends Controller
 
         $meetings = Meeting::with('host:id,name,avatar_url')
             ->withCount('activeParticipants')
-            ->where(function ($query) use ($user) {
-                $query->where('host_id', $user->id)
-                    ->orWhereHas('participants', function ($pQuery) use ($user) {
-                        $pQuery->where('user_id', $user->id);
-                    });
-            })
+            ->where('host_id', $user->id)
             ->where('is_active', true)
             ->whereNull('ended_at')
             ->orderByRaw('CASE WHEN scheduled_at IS NOT NULL THEN scheduled_at ELSE created_at END ASC')
@@ -507,7 +497,7 @@ class MeetingController extends Controller
 
         $user = $request->user();
 
-        if ($user->isGuest() || ($meeting->host_id !== $user->id && ! $user->isAdmin())) {
+        if ($user->isGuest() || $meeting->host_id !== $user->id) {
             return $this->errorResponse('Only the host can end this meeting', 403);
         }
 
@@ -562,7 +552,7 @@ class MeetingController extends Controller
 
         $user = $request->user();
 
-        if ($user->isGuest() || ($meeting->host_id !== $user->id && ! $user->isAdmin())) {
+        if ($user->isGuest() || $meeting->host_id !== $user->id) {
             return $this->errorResponse('Only the host can delete this meeting', 403);
         }
 
