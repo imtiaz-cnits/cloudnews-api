@@ -158,6 +158,36 @@ class LiveKitService
     }
 
     /**
+     * Remove a participant from a room on the LiveKit SFU via Twirp JSON API.
+     */
+    public function removeParticipant(string $roomName, string $identity): bool
+    {
+        try {
+            $adminToken = $this->generateAdminToken(120);
+
+            $response = Http::withToken($adminToken)
+                ->asJson()
+                ->timeout(5)
+                ->post("{$this->host}/twirp/livekit.RoomService/RemoveParticipant", [
+                    'room' => $roomName,
+                    'identity' => $identity,
+                ]);
+
+            if ($response->successful()) {
+                return true;
+            }
+
+            Log::warning('LiveKit removeParticipant response: '.$response->status().' - '.$response->body());
+
+            return false;
+        } catch (Throwable $e) {
+            Log::error('LiveKit removeParticipant exception: '.$e->getMessage());
+
+            return false;
+        }
+    }
+
+    /**
      * Verify LiveKit webhook signature and SHA256 checksum, then decode payload.
      *
      * @param  string  $rawBody  The raw body from $request->getContent()

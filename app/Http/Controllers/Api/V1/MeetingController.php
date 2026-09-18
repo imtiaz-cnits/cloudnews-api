@@ -560,6 +560,53 @@ class MeetingController extends Controller
     }
 
     /**
+     * Remove a participant from the meeting (Host only).
+     */
+    public function removeParticipant(Request $request, string $meetingCode): JsonResponse
+    {
+        $meeting = $this->findMeetingByCode($meetingCode);
+
+        if (! $meeting) {
+            return $this->errorResponse('Meeting not found', 404);
+        }
+
+        $user = $request->user();
+
+        if ($user->isGuest() || $meeting->host_id !== $user->id) {
+            return $this->errorResponse('Only the host can remove participants', 403);
+        }
+
+        $validated = $request->validate([
+            'identity' => 'required|string',
+        ]);
+
+        $identity = $validated['identity'];
+
+        // Prevent removing the host
+        if (preg_match('/^(?:user_|guest_)?(\d+)$/', $identity, $matches)) {
+            $targetUserId = (int) $matches[1];
+            if ($targetUserId === $meeting->host_id) {
+                return $this->errorResponse('Cannot remove the meeting host', 422);
+            }
+
+            // Mark participant record as departed
+            MeetingParticipant::where('meeting_id', $meeting->id)
+                ->where('user_id', $targetUserId)
+                ->whereNull('left_at')
+                ->update(['left_at' => now()]);
+        }
+
+        // Remove from LiveKit SFU
+        try {
+            $this->liveKitService->removeParticipant($meeting->room_name, $identity);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Failed to remove participant on LiveKit SFU: ' . $e->getMessage());
+        }
+
+        return $this->successResponse(null, 'Participant removed successfully');
+    }
+
+    /**
      * Delete a meeting and clean up SFU resources (Host only).
      */
     public function destroy(Request $request, string $meetingCode): JsonResponse

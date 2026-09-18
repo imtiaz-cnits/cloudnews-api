@@ -780,6 +780,79 @@ class MeetingTest extends TestCase
         $meetingA->refresh();
         $this->assertTrue($meetingA->is_active);
     }
+
+    public function test_host_can_remove_participant_from_meeting(): void
+    {
+        $host = User::factory()->create(['role' => 'host']);
+        $guest = User::factory()->guest()->create(['name' => 'Guest Target']);
+
+        $meeting = Meeting::factory()->create([
+            'host_id' => $host->id,
+            'is_active' => true,
+        ]);
+
+        $participant = MeetingParticipant::create([
+            'meeting_id' => $meeting->id,
+            'user_id' => $guest->id,
+            'role' => 'participant',
+            'joined_at' => now(),
+            'left_at' => null,
+        ]);
+
+        $response = $this->actingAs($host)->postJson("/api/v1/meetings/{$meeting->meeting_code}/participants/remove", [
+            'identity' => "guest_{$guest->id}",
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'message' => 'Participant removed successfully',
+            ]);
+
+        $this->assertNotNull($participant->fresh()->left_at);
+    }
+
+    public function test_non_host_cannot_remove_participant(): void
+    {
+        $host = User::factory()->create(['role' => 'host']);
+        $guest1 = User::factory()->guest()->create(['name' => 'Guest One']);
+        $guest2 = User::factory()->guest()->create(['name' => 'Guest Two']);
+
+        $meeting = Meeting::factory()->create([
+            'host_id' => $host->id,
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($guest1)->postJson("/api/v1/meetings/{$meeting->meeting_code}/participants/remove", [
+            'identity' => "guest_{$guest2->id}",
+        ]);
+
+        $response->assertStatus(403)
+            ->assertJson([
+                'success' => false,
+                'message' => 'Only the host can remove participants',
+            ]);
+    }
+
+    public function test_host_cannot_remove_themselves(): void
+    {
+        $host = User::factory()->create(['role' => 'host']);
+
+        $meeting = Meeting::factory()->create([
+            'host_id' => $host->id,
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($host)->postJson("/api/v1/meetings/{$meeting->meeting_code}/participants/remove", [
+            'identity' => "user_{$host->id}",
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJson([
+                'success' => false,
+                'message' => 'Cannot remove the meeting host',
+            ]);
+    }
 }
 
 
