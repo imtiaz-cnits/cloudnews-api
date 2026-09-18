@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\MeetingController;
 use App\Http\Controllers\Api\V1\MeetingFileController;
 use App\Http\Controllers\Api\V1\MeetingMessageController;
 use App\Http\Controllers\Api\V1\UserController;
+use App\Http\Controllers\MeetingJoinWebController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
@@ -26,6 +27,8 @@ Route::prefix('v1')->group(function () {
 
     // Meeting Pre-validation (accessible before joining)
     Route::post('/meetings/validate', [MeetingController::class, 'validateMeeting']);
+    Route::get('/room/{meetingCode}', [MeetingJoinWebController::class, 'join']);
+    Route::get('/join/{meetingCode?}', [MeetingJoinWebController::class, 'join']);
 
     // Authenticated User Profile Routes
     Route::middleware('auth:sanctum')->group(function () {
@@ -58,6 +61,9 @@ Route::prefix('v1')->group(function () {
 Route::get('/users', [UserController::class, 'index']);
 Route::post('/meetings/validate', [MeetingController::class, 'validateMeeting']);
 Route::get('/files/download/{meeting_code}/{filename}', [MeetingFileController::class, 'download']);
+Route::get('/room/{meetingCode}', [MeetingJoinWebController::class, 'join'])->name('api.meeting.web.join');
+Route::get('/join/{meetingCode?}', [MeetingJoinWebController::class, 'join'])->name('api.meeting.web.join_alias');
+Route::get('/.well-known/assetlinks.json', [MeetingJoinWebController::class, 'assetLinks'])->name('api.meeting.web.assetlinks');
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::put('/users/profile', [UserController::class, 'updateProfile']);

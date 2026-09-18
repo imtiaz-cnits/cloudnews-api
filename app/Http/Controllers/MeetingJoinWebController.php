@@ -24,9 +24,9 @@ class MeetingJoinWebController extends Controller
         // Extract clean digits
         $cleanDigits = preg_replace('/\D/', '', $rawCode);
         $formattedCode = (strlen($cleanDigits) === 6)
-            ? substr($cleanDigits, 0, 3) . '-' . substr($cleanDigits, 3, 3)
+            ? substr($cleanDigits, 0, 3).'-'.substr($cleanDigits, 3, 3)
             : ((strlen($cleanDigits) === 9)
-                ? substr($cleanDigits, 0, 3) . '-' . substr($cleanDigits, 3, 3) . '-' . substr($cleanDigits, 6, 3)
+                ? substr($cleanDigits, 0, 3).'-'.substr($cleanDigits, 3, 3).'-'.substr($cleanDigits, 6, 3)
                 : $rawCode);
 
         $meeting = null;
@@ -35,9 +35,17 @@ class MeetingJoinWebController extends Controller
                 ->where('meeting_code', $rawCode)
                 ->orWhere('meeting_code', $formattedCode)
                 ->orWhere('meeting_code', $cleanDigits)
+                ->orWhere('meeting_code', 'LIKE', "%{$cleanDigits}%")
                 ->orWhere('room_name', $rawCode)
                 ->orWhere('room_name', strtolower($rawCode))
                 ->first();
+
+            if ($meeting && (! $meeting->is_active || $meeting->ended_at !== null)) {
+                $meeting->update([
+                    'is_active' => true,
+                    'ended_at' => null,
+                ]);
+            }
         }
 
         $displayCode = $meeting?->meeting_code ?? (! empty($formattedCode) ? $formattedCode : 'CloudNews');
