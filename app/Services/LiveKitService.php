@@ -188,6 +188,54 @@ class LiveKitService
     }
 
     /**
+     * List current participants in a room on the LiveKit SFU via Twirp JSON API.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function listParticipants(string $roomName): array
+    {
+        try {
+            $adminToken = $this->generateAdminToken(120);
+
+            $response = Http::withToken($adminToken)
+                ->asJson()
+                ->timeout(5)
+                ->post("{$this->host}/twirp/livekit.RoomService/ListParticipants", [
+                    'room' => $roomName,
+                ]);
+
+            if ($response->successful()) {
+                $data = $response->json();
+
+                return $data['participants'] ?? [];
+            }
+
+            return [];
+        } catch (Throwable $e) {
+            Log::warning('LiveKit listParticipants exception: '.$e->getMessage());
+
+            return [];
+        }
+    }
+
+    /**
+     * Check if a specific host user is currently connected to the LiveKit room.
+     */
+    public function isHostInRoom(string $roomName, int $hostId): bool
+    {
+        $participants = $this->listParticipants($roomName);
+        $expectedIdentity = "user_{$hostId}";
+
+        foreach ($participants as $participant) {
+            if (isset($participant['identity']) && $participant['identity'] === $expectedIdentity) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Verify LiveKit webhook signature and SHA256 checksum, then decode payload.
      *
      * @param  string  $rawBody  The raw body from $request->getContent()

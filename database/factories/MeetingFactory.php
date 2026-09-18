@@ -27,6 +27,7 @@ class MeetingFactory extends Factory
             'passcode' => null,
             'is_active' => true,
             'is_locked' => false,
+            'is_host_online' => true,
             'max_participants' => 12,
             'started_at' => now(),
             'ended_at' => null,

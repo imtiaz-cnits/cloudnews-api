@@ -853,4 +853,116 @@ class MeetingTest extends TestCase
                 'message' => 'Cannot remove the meeting host',
             ]);
     }
+
+    public function test_guest_cannot_join_before_host_starts_meeting(): void
+    {
+        $host = User::factory()->create(['role' => 'host']);
+        $guest = User::factory()->guest()->create(['name' => 'Early Guest']);
+
+        $meeting = Meeting::factory()->create([
+            'host_id' => $host->id,
+            'is_host_online' => false,
+            'started_at' => null,
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($guest)->postJson("/api/v1/meetings/{$meeting->meeting_code}/join");
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'success' => false,
+                'status' => 'waiting_for_host',
+                'code' => 'WAITING_FOR_HOST',
+                'message' => 'The host has not started the meeting yet. Please wait...',
+            ]);
+
+        $this->assertNull($response->json('data.token'));
+        $this->assertNull($response->json('data.livekit_token'));
+
+        $this->assertDatabaseMissing('meeting_participants', [
+            'meeting_id' => $meeting->id,
+            'user_id' => $guest->id,
+        ]);
+    }
+
+    public function test_guest_can_join_after_host_starts_meeting(): void
+    {
+        $host = User::factory()->create(['role' => 'host']);
+        $guest = User::factory()->guest()->create(['name' => 'Waiting Guest']);
+
+        $meeting = Meeting::factory()->create([
+            'host_id' => $host->id,
+            'is_host_online' => false,
+            'started_at' => null,
+            'is_active' => true,
+        ]);
+
+        // 1. Guest attempts early entry -> Gated
+        $earlyResponse = $this->actingAs($guest)->postJson("/api/v1/meetings/{$meeting->meeting_code}/join");
+        $earlyResponse->assertStatus(200)
+            ->assertJson([
+                'code' => 'WAITING_FOR_HOST',
+                'status' => 'waiting_for_host',
+            ]);
+
+        // 2. Host enters and starts the meeting
+        $hostResponse = $this->actingAs($host)->postJson("/api/v1/meetings/{$meeting->meeting_code}/join");
+        $hostResponse->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'data' => [
+                    'is_host' => true,
+                    'role' => 'host',
+                ],
+            ]);
+
+        $this->assertTrue($meeting->fresh()->is_host_online);
+
+        // 3. Guest polls again -> Permitted to enter with token
+        $guestPollResponse = $this->actingAs($guest)->postJson("/api/v1/meetings/{$meeting->meeting_code}/join");
+        $guestPollResponse->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'data' => [
+                    'is_host' => false,
+                    'role' => 'participant',
+                    'meeting_code' => $meeting->meeting_code,
+                ],
+            ]);
+
+        $this->assertNotNull($guestPollResponse->json('data.livekit_token'));
+
+        $this->assertDatabaseHas('meeting_participants', [
+            'meeting_id' => $meeting->id,
+            'user_id' => $guest->id,
+            'role' => 'participant',
+        ]);
+    }
+
+    public function test_host_leaving_marks_host_offline(): void
+    {
+        $host = User::factory()->create(['role' => 'host']);
+        $guest = User::factory()->guest()->create(['name' => 'Second Guest']);
+
+        $meeting = Meeting::factory()->create([
+            'host_id' => $host->id,
+            'is_host_online' => true,
+            'started_at' => now(),
+            'is_active' => true,
+        ]);
+
+        // Host leaves the meeting
+        $leaveResponse = $this->actingAs($host)->postJson("/api/v1/meetings/{$meeting->meeting_code}/leave");
+        $leaveResponse->assertStatus(200);
+
+        $this->assertFalse($meeting->fresh()->is_host_online);
+
+        // Subsequent guest attempts to join -> Gated
+        $guestResponse = $this->actingAs($guest)->postJson("/api/v1/meetings/{$meeting->meeting_code}/join");
+        $guestResponse->assertStatus(200)
+            ->assertJson([
+                'code' => 'WAITING_FOR_HOST',
+                'status' => 'waiting_for_host',
+            ]);
+    }
 }

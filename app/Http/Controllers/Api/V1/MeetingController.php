@@ -87,6 +87,7 @@ class MeetingController extends Controller
                 'passcode' => $validated['passcode'] ?? $meeting->passcode,
                 'is_active' => true,
                 'is_locked' => false,
+                'is_host_online' => true,
                 'started_at' => now(),
                 'ended_at' => null,
             ]);
@@ -105,6 +106,7 @@ class MeetingController extends Controller
                 'passcode' => $validated['passcode'] ?? null,
                 'is_active' => true,
                 'is_locked' => false,
+                'is_host_online' => true,
                 'max_participants' => $validated['max_participants'] ?? 12,
                 'started_at' => now(),
             ]);
@@ -215,6 +217,7 @@ class MeetingController extends Controller
             'passcode' => ! empty($validated['passcode']) ? $validated['passcode'] : null,
             'is_active' => true,
             'is_locked' => false,
+            'is_host_online' => false,
             'waiting_room' => $request->boolean('waiting_room'),
             'max_participants' => $validated['max_participants'] ?? 12,
             'scheduled_at' => $scheduledAt ?? now()->addDay(),
@@ -395,6 +398,7 @@ class MeetingController extends Controller
             'title' => $meeting->title,
             'is_active' => true,
             'is_locked' => $meeting->is_locked,
+            'is_host_online' => (bool) $meeting->is_host_online,
             'requires_passcode' => $meeting->hasPasscode(),
         ], 'Meeting is valid and ready to join');
     }
@@ -410,16 +414,69 @@ class MeetingController extends Controller
             return $this->errorResponse('Meeting not found. Please check the code or link.', 404);
         }
 
-        // As long as the meeting exists in DB, ensure it is active
-        if (! $meeting->is_active || $meeting->ended_at !== null) {
-            $meeting->update([
-                'is_active' => true,
-                'ended_at' => null,
-            ]);
-        }
-
         $user = $request->user();
         $isHost = (! $user->isGuest() && $user->id === $meeting->host_id);
+
+        if ($isHost) {
+            // Host is starting or re-entering the meeting
+            $meeting->update([
+                'is_active' => true,
+                'is_host_online' => true,
+                'started_at' => $meeting->started_at ?? now(),
+                'ended_at' => null,
+            ]);
+
+            // Explicitly ensure room is pre-created on LiveKit SFU
+            try {
+                $this->liveKitService->createRoom($meeting->room_name, [
+                    'empty_timeout' => 86400,
+                    'max_participants' => $meeting->max_participants,
+                ]);
+            } catch (\Throwable $e) {
+                // Room may already exist or SFU offline in testing
+            }
+        } else {
+            // Guest verification: check whether the host has started the meeting
+            $isHostPresent = (bool) $meeting->is_host_online;
+
+            // Check LiveKit SFU room participants if available
+            if (! $isHostPresent) {
+                $isHostPresent = $this->liveKitService->isHostInRoom($meeting->room_name, $meeting->host_id);
+            }
+
+            // Check active host record in database
+            if (! $isHostPresent) {
+                if (! empty($meeting->started_at) && $meeting->is_active && empty($meeting->ended_at)) {
+                    $hasActiveHostInDb = MeetingParticipant::where('meeting_id', $meeting->id)
+                        ->where('user_id', $meeting->host_id)
+                        ->whereNull('left_at')
+                        ->exists();
+
+                    if ($hasActiveHostInDb) {
+                        $isHostPresent = true;
+                        $meeting->update(['is_host_online' => true]);
+                    }
+                }
+            }
+
+            // If host is NOT present, do NOT issue LiveKit token
+            if (! $isHostPresent) {
+                return response()->json([
+                    'success' => false,
+                    'status' => 'waiting_for_host',
+                    'code' => 'WAITING_FOR_HOST',
+                    'message' => 'The host has not started the meeting yet. Please wait...',
+                ], 200);
+            }
+
+            // Host is present: ensure meeting is active
+            if (! $meeting->is_active || $meeting->ended_at !== null) {
+                $meeting->update([
+                    'is_active' => true,
+                    'ended_at' => null,
+                ]);
+            }
+        }
 
         if (! $isHost && $meeting->is_locked) {
             return $this->errorResponse('This meeting has been locked by the host', 403);
@@ -504,6 +561,7 @@ class MeetingController extends Controller
 
         $meeting->update([
             'is_active' => false,
+            'is_host_online' => false,
             'ended_at' => now(),
         ]);
 
@@ -541,6 +599,7 @@ class MeetingController extends Controller
         if (! $user->isGuest() && $meeting->host_id === $user->id) {
             $meeting->update([
                 'is_active' => false,
+                'is_host_online' => false,
                 'ended_at' => now(),
             ]);
 
