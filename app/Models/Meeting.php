@@ -152,6 +152,16 @@ class Meeting extends Model
     }
 
     /**
+     * All messages and shared files for this meeting.
+     *
+     * @return HasMany<MeetingMessage, $this>
+     */
+    public function messages(): HasMany
+    {
+        return $this->hasMany(MeetingMessage::class, 'meeting_id')->orderBy('created_at', 'asc');
+    }
+
+    /**
      * Scope a query to only include active meetings.
      *
      * @param  Builder<$this>  $query

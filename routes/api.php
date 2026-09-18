@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\LiveKitWebhookController;
 use App\Http\Controllers\Api\V1\MeetingController;
 use App\Http\Controllers\Api\V1\MeetingFileController;
+use App\Http\Controllers\Api\V1\MeetingMessageController;
 use App\Http\Controllers\Api\V1\UserController;
 use Illuminate\Support\Facades\Route;
 
@@ -44,6 +45,8 @@ Route::prefix('v1')->group(function () {
         Route::post('/{meeting_code}/leave', [MeetingController::class, 'leave']);
         Route::post('/{meeting_code}/files', [MeetingFileController::class, 'upload']);
         Route::get('/files/download/{meeting_code}/{filename}', [MeetingFileController::class, 'download']);
+        Route::get('/{meeting_code}/messages', [MeetingMessageController::class, 'index']);
+        Route::post('/{meeting_code}/messages', [MeetingMessageController::class, 'store']);
     });
 
     // LiveKit SFU Webhooks
@@ -67,4 +70,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/meetings/{meeting_code}/end', [MeetingController::class, 'end']);
     Route::post('/meetings/{meeting_code}/leave', [MeetingController::class, 'leave']);
     Route::post('/meetings/{meeting_code}/files', [MeetingFileController::class, 'upload']);
+    Route::get('/meetings/{meeting_code}/messages', [MeetingMessageController::class, 'index']);
+    Route::post('/meetings/{meeting_code}/messages', [MeetingMessageController::class, 'store']);
 });
