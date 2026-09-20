@@ -512,12 +512,26 @@ class MeetingController extends Controller
             ]);
         }
 
-        // Generate LiveKit JWT
+        // Determine participant display name (supports Chinese/non-ASCII and whitespace)
+        $requestedName = $request->input('participant_name') ?: $request->input('name');
+        if (! empty($requestedName)) {
+            $displayName = trim($requestedName);
+            if ($user->is_guest) {
+                $user->update(['name' => $displayName]);
+            }
+        } else {
+            $displayName = $user->name;
+        }
+
+        // LiveKit identity MUST be a URL-safe ASCII string.
+        // Never put raw Unicode/Chinese characters into identity!
         $identity = $user->is_guest ? "guest_{$user->id}" : "user_{$user->id}";
+
+        // Generate LiveKit JWT
         $token = $this->liveKitService->generateJoinToken(
             roomName: $meeting->room_name,
             identity: $identity,
-            name: $user->name,
+            name: $displayName,
             isHost: $isHost,
             role: $role,
             metadata: [
@@ -525,6 +539,7 @@ class MeetingController extends Controller
                 'is_host' => $isHost,
                 'user_id' => $user->id,
                 'is_guest' => (bool) $user->is_guest,
+                'display_name' => $displayName,
             ]
         );
 
@@ -535,7 +550,7 @@ class MeetingController extends Controller
             'meeting_code' => $meeting->meeting_code,
             'title' => $meeting->title,
             'identity' => $identity,
-            'name' => $user->name,
+            'name' => $displayName,
             'role' => $role,
             'is_host' => $isHost,
             'livekit_url' => $this->liveKitService->getHost(),
