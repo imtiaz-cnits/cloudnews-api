@@ -109,12 +109,14 @@ class MeetingChatController extends Controller
                 : $rawInput);
 
         return Meeting::where('meeting_code', $rawInput)
-            ->orWhere('meeting_code', $formattedCode)
-            ->orWhere('meeting_code', $cleanDigits)
+            ->when(! empty($cleanDigits), function ($query) use ($cleanDigits, $formattedCode) {
+                $query->orWhere('meeting_code', $formattedCode)
+                    ->orWhere('meeting_code', $cleanDigits)
+                    ->orWhereRaw("REPLACE(meeting_code, '-', '') = ?", [$cleanDigits]);
+            })
             ->orWhere('room_name', $rawInput)
             ->orWhere('room_name', strtolower($rawInput))
             ->orWhereRaw("REPLACE(room_name, '-', '') = ?", [str_replace('-', '', strtolower($rawInput))])
-            ->orWhereRaw("REPLACE(meeting_code, '-', '') = ?", [$cleanDigits ?: $rawInput])
             ->when(is_numeric($rawInput), function ($query) use ($rawInput) {
                 $query->orWhere('id', (int) $rawInput);
             })
