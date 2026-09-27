@@ -40,9 +40,11 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $exceptions->render(function (AuthenticationException $e, Request $request) {
             if ($request->is('api/*') || $request->expectsJson()) {
+                $hasToken = ! empty($request->bearerToken());
                 return response()->json([
                     'success' => false,
-                    'message' => 'Unauthenticated.',
+                    'message' => $hasToken ? 'This account was signed in on another device.' : 'Unauthenticated.',
+                    'error_code' => $hasToken ? 'AUTH_SESSION_REVOKED' : 'UNAUTHENTICATED',
                 ], 401);
             }
         });

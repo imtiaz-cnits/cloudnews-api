@@ -9,6 +9,7 @@ use App\Http\Requests\Auth\RegisterRequest;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
 class AuthController extends Controller
@@ -52,21 +53,30 @@ class AuthController extends Controller
             return $this->errorResponse('Invalid email or password', 401);
         }
 
-        // When authenticating with valid credentials, ensure account is not marked as guest
-        if ($user->is_guest) {
-            $user->is_guest = false;
-            if ($user->role === 'guest') {
-                $user->role = 'host';
+        return DB::transaction(function () use ($user) {
+            $lockedUser = User::where('id', $user->id)->lockForUpdate()->first();
+
+            // When authenticating with valid credentials, ensure account is not marked as guest
+            if ($lockedUser->is_guest) {
+                $lockedUser->is_guest = false;
+                if ($lockedUser->role === 'guest') {
+                    $lockedUser->role = 'host';
+                }
+                $lockedUser->save();
             }
-            $user->save();
-        }
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+            // Enforce ONE USER ACCOUNT = ONE ACTIVE AUTHENTICATED DEVICE SESSION.
+            // Invalidate all previous device sessions/tokens for this account atomically.
+            $lockedUser->tokens()->delete();
 
-        return $this->successResponse([
-            'user' => $user,
-            'token' => $token,
-        ], 'Login successful');
+            // Create exactly one new auth token for the current device session.
+            $token = $lockedUser->createToken('auth_token')->plainTextToken;
+
+            return $this->successResponse([
+                'user' => $lockedUser,
+                'token' => $token,
+            ], 'Login successful');
+        });
     }
 
     /**

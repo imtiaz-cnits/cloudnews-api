@@ -161,6 +161,9 @@ class MeetingTest extends TestCase
             'passcode' => 'JoinCode456',
         ]);
 
+        // Host must be active in meeting for participant to be admitted
+        $this->actingAs($host)->postJson("/api/v1/meetings/{$meeting->meeting_code}/join");
+
         $response = $this->actingAs($guest)->postJson("/api/v1/meetings/{$meeting->meeting_code}/join", [
             'passcode' => 'JoinCode456',
         ]);
@@ -620,6 +623,9 @@ class MeetingTest extends TestCase
             'is_active' => true,
         ]);
 
+        // Host must be active in meeting for participant to be admitted
+        $this->actingAs($host)->postJson("/api/v1/meetings/{$meeting->meeting_code}/join");
+
         // 1. Join using clean digits without dashes (801981285)
         $cleanCode = '801981285';
         $responseClean = $this->actingAs($guest)->postJson("/api/v1/meetings/{$cleanCode}/join");
@@ -666,7 +672,10 @@ class MeetingTest extends TestCase
             ->assertJsonPath('data.is_host', true);
 
         // 2. Host ends the meeting
-        $resEnd = $this->actingAs($host)->postJson("/api/v1/meetings/{$pmiCode}/end");
+        $token1 = $res1->json('data.host_session_token');
+        $resEnd = $this->actingAs($host)->postJson("/api/v1/meetings/{$pmiCode}/end", [
+            'host_session_token' => $token1,
+        ]);
         $resEnd->assertStatus(200);
 
         $dbMeeting = Meeting::where('meeting_code', $pmiCode)->first();

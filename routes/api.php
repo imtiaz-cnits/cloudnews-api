@@ -46,6 +46,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/{meeting_code}/join', [MeetingController::class, 'join']);
         Route::post('/{meeting_code}/end', [MeetingController::class, 'end']);
         Route::post('/{meeting_code}/leave', [MeetingController::class, 'leave']);
+        Route::post('/{meeting_code}/host/heartbeat', [MeetingController::class, 'heartbeat']);
         Route::post('/{meeting_code}/participants/remove', [MeetingController::class, 'removeParticipant']);
         Route::post('/{meeting_code}/files', [MeetingFileController::class, 'upload']);
     });
@@ -80,6 +81,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/meetings/{meeting_code}/join', [MeetingController::class, 'join']);
     Route::post('/meetings/{meeting_code}/end', [MeetingController::class, 'end']);
     Route::post('/meetings/{meeting_code}/leave', [MeetingController::class, 'leave']);
+    Route::post('/meetings/{meeting_code}/host/heartbeat', [MeetingController::class, 'heartbeat']);
     Route::post('/meetings/{meeting_code}/participants/remove', [MeetingController::class, 'removeParticipant']);
     Route::post('/meetings/{meeting_code}/files', [MeetingFileController::class, 'upload']);
 });

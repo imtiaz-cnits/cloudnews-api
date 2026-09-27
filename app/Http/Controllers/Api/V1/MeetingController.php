@@ -2,22 +2,29 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Exceptions\HostAlreadyInMeetingException;
+use App\Exceptions\HostSessionInvalidException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Meeting\CreateMeetingRequest;
 use App\Http\Requests\Meeting\JoinMeetingRequest;
 use App\Http\Requests\Meeting\ValidateMeetingRequest;
 use App\Models\Meeting;
+use App\Models\MeetingHostSession;
 use App\Models\MeetingParticipant;
+use App\Models\User;
+use App\Services\HostSessionService;
 use App\Services\LiveKitService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class MeetingController extends Controller
 {
     public function __construct(
-        protected LiveKitService $liveKitService
+        protected LiveKitService $liveKitService,
+        protected HostSessionService $hostSessionService
     ) {}
 
     /**
@@ -76,64 +83,86 @@ class MeetingController extends Controller
             }
         }
 
-        $existingMeeting = $meetingCode
-            ? Meeting::where('meeting_code', $meetingCode)->where('host_id', $user->id)->first()
-            : null;
+        $meeting = null;
+        $hostSession = null;
 
-        if ($existingMeeting) {
-            $meeting = $existingMeeting;
-            $meeting->update([
-                'title' => $validated['title'],
-                'passcode' => $validated['passcode'] ?? $meeting->passcode,
-                'is_active' => true,
-                'is_locked' => false,
-                'is_host_online' => true,
-                'started_at' => now(),
-                'ended_at' => null,
-            ]);
-            $roomName = $meeting->room_name;
-        } else {
-            $roomName = Meeting::generateRoomName();
-            if (! $meetingCode) {
-                $meetingCode = Meeting::generateMeetingCode();
-            }
+        try {
+            DB::transaction(function () use ($user, $validated, $meetingCode, $request, &$meeting, &$hostSession) {
+                User::where('id', $user->id)->lockForUpdate()->first();
 
-            $meeting = Meeting::create([
-                'host_id' => $user->id,
-                'room_name' => $roomName,
-                'meeting_code' => $meetingCode,
-                'title' => $validated['title'],
-                'passcode' => $validated['passcode'] ?? null,
-                'is_active' => true,
-                'is_locked' => false,
-                'is_host_online' => true,
-                'max_participants' => $validated['max_participants'] ?? 12,
-                'started_at' => now(),
-            ]);
+                $existingMeeting = $meetingCode
+                    ? Meeting::where('meeting_code', $meetingCode)->where('host_id', $user->id)->first()
+                    : null;
+
+                if ($existingMeeting) {
+                    $meeting = $existingMeeting;
+                    $meeting->update([
+                        'title' => $validated['title'],
+                        'passcode' => $validated['passcode'] ?? $meeting->passcode,
+                        'is_active' => true,
+                        'is_locked' => false,
+                        'is_host_online' => true,
+                        'started_at' => now(),
+                        'ended_at' => null,
+                    ]);
+                } else {
+                    $roomName = Meeting::generateRoomName();
+                    $code = $meetingCode ?: Meeting::generateMeetingCode();
+
+                    $meeting = Meeting::create([
+                        'host_id' => $user->id,
+                        'room_name' => $roomName,
+                        'meeting_code' => $code,
+                        'title' => $validated['title'],
+                        'passcode' => $validated['passcode'] ?? null,
+                        'is_active' => true,
+                        'is_locked' => false,
+                        'is_host_online' => true,
+                        'max_participants' => $validated['max_participants'] ?? 12,
+                        'started_at' => now(),
+                    ]);
+                }
+
+                // Acquire host session lock (will throw HostAlreadyInMeetingException if invalid)
+                $hostSession = $this->hostSessionService->acquireHostLock(
+                    $user,
+                    $meeting,
+                    $request->input('host_session_token')
+                );
+
+                // Record or update host as participant
+                MeetingParticipant::updateOrCreate(
+                    [
+                        'meeting_id' => $meeting->id,
+                        'user_id' => $user->id,
+                    ],
+                    [
+                        'role' => 'host',
+                        'joined_at' => now(),
+                        'left_at' => null,
+                    ]
+                );
+            });
+        } catch (HostAlreadyInMeetingException $e) {
+            return response()->json([
+                'success' => false,
+                'code' => 'HOST_ALREADY_IN_MEETING',
+                'message' => $e->getMessage(),
+                'data' => [
+                    'active_meeting_code' => $e->getActiveMeetingCode(),
+                ],
+            ], 409);
         }
 
         // Explicitly pre-create room on LiveKit SFU
         try {
-            $this->liveKitService->createRoom($roomName, [
+            $this->liveKitService->createRoom($meeting->room_name, [
                 'empty_timeout' => 86400,
                 'max_participants' => $meeting->max_participants,
             ]);
         } catch (\Throwable $e) {
             // LiveKit SFU room might already exist or SFU offline in test
         }
-
-        // Record or update host as participant
-        MeetingParticipant::updateOrCreate(
-            [
-                'meeting_id' => $meeting->id,
-                'user_id' => $user->id,
-            ],
-            [
-                'role' => 'host',
-                'joined_at' => now(),
-                'left_at' => null,
-            ]
-        );
 
         // Generate LiveKit Host JWT Token
         $identity = $user->is_guest ? "guest_{$user->id}" : "user_{$user->id}";
@@ -162,6 +191,7 @@ class MeetingController extends Controller
             'meeting' => $meetingData,
             'token' => $token,
             'livekit_token' => $token,
+            'host_session_token' => $hostSession->session_token,
             'room_name' => $meeting->room_name,
             'meeting_code' => $meeting->meeting_code,
             'is_host' => true,
@@ -391,6 +421,8 @@ class MeetingController extends Controller
             ]);
         }
 
+        $isHostActive = $this->hostSessionService->isHostActive($meeting);
+
         return $this->successResponse([
             'valid' => true,
             'meeting_code' => $meeting->meeting_code,
@@ -398,7 +430,7 @@ class MeetingController extends Controller
             'title' => $meeting->title,
             'is_active' => true,
             'is_locked' => $meeting->is_locked,
-            'is_host_online' => (bool) $meeting->is_host_online,
+            'is_host_online' => $isHostActive,
             'requires_passcode' => $meeting->hasPasscode(),
         ], 'Meeting is valid and ready to join');
     }
@@ -416,15 +448,36 @@ class MeetingController extends Controller
 
         $user = $request->user();
         $isHost = (! $user->isGuest() && $user->id === $meeting->host_id);
+        $hostSession = null;
 
         if ($isHost) {
-            // Host is starting or re-entering the meeting
-            $meeting->update([
-                'is_active' => true,
-                'is_host_online' => true,
-                'started_at' => $meeting->started_at ?? now(),
-                'ended_at' => null,
-            ]);
+            try {
+                DB::transaction(function () use ($user, $meeting, $request, &$hostSession) {
+                    User::where('id', $user->id)->lockForUpdate()->first();
+
+                    $hostSession = $this->hostSessionService->acquireHostLock(
+                        $user,
+                        $meeting,
+                        $request->input('host_session_token')
+                    );
+
+                    $meeting->update([
+                        'is_active' => true,
+                        'is_host_online' => true,
+                        'started_at' => $meeting->started_at ?? now(),
+                        'ended_at' => null,
+                    ]);
+                });
+            } catch (HostAlreadyInMeetingException $e) {
+                return response()->json([
+                    'success' => false,
+                    'code' => 'HOST_ALREADY_IN_MEETING',
+                    'message' => $e->getMessage(),
+                    'data' => [
+                        'active_meeting_code' => $e->getActiveMeetingCode(),
+                    ],
+                ], 409);
+            }
 
             // Explicitly ensure room is pre-created on LiveKit SFU
             try {
@@ -436,36 +489,47 @@ class MeetingController extends Controller
                 // Room may already exist or SFU offline in testing
             }
         } else {
-            // Guest verification: check whether the host has started the meeting
-            $isHostPresent = (bool) $meeting->is_host_online;
-
-            // Check LiveKit SFU room participants if available
-            if (! $isHostPresent) {
-                $isHostPresent = $this->liveKitService->isHostInRoom($meeting->room_name, $meeting->host_id);
+            if ($meeting->is_locked) {
+                return $this->errorResponse('This meeting has been locked by the host', 403);
             }
 
-            // Check active host record in database
-            if (! $isHostPresent) {
-                if (! empty($meeting->started_at) && $meeting->is_active && empty($meeting->ended_at)) {
-                    $hasActiveHostInDb = MeetingParticipant::where('meeting_id', $meeting->id)
-                        ->where('user_id', $meeting->host_id)
-                        ->whereNull('left_at')
-                        ->exists();
-
-                    if ($hasActiveHostInDb) {
-                        $isHostPresent = true;
-                        $meeting->update(['is_host_online' => true]);
-                    }
+            // Passcode verification for non-hosts
+            if ($meeting->hasPasscode()) {
+                $passcode = $request->validated('passcode');
+                if (empty($passcode) || ! $meeting->verifyPasscode($passcode)) {
+                    return $this->errorResponse('Invalid or missing meeting passcode', 403);
                 }
             }
 
-            // If host is NOT present, do NOT issue LiveKit token
-            if (! $isHostPresent) {
+            // Capacity check (allow existing active participant to re-join/reconnect)
+            $existingActive = MeetingParticipant::where('meeting_id', $meeting->id)
+                ->where('user_id', $user->id)
+                ->whereNull('left_at')
+                ->first();
+
+            if (! $existingActive && $meeting->activeParticipants()->count() >= $meeting->max_participants) {
+                return $this->errorResponse('Meeting has reached maximum participant limit', 422);
+            }
+
+            // Guest verification: check whether the host has an active, unexpired host session
+            $isHostActive = $this->hostSessionService->isHostActive($meeting);
+
+            if ($meeting->is_host_online !== $isHostActive) {
+                $meeting->update(['is_host_online' => $isHostActive]);
+            }
+
+            // If host is NOT actively present, do NOT issue LiveKit token
+            if (! $isHostActive) {
                 return response()->json([
                     'success' => false,
                     'status' => 'waiting_for_host',
                     'code' => 'WAITING_FOR_HOST',
                     'message' => 'The host has not started the meeting yet. Please wait...',
+                    'data' => [
+                        'meeting_code' => $meeting->meeting_code,
+                        'title' => $meeting->title,
+                        'waiting_for_host' => true,
+                    ],
                 ], 200);
             }
 
@@ -478,27 +542,10 @@ class MeetingController extends Controller
             }
         }
 
-        if (! $isHost && $meeting->is_locked) {
-            return $this->errorResponse('This meeting has been locked by the host', 403);
-        }
-
-        // Passcode verification for non-hosts
-        if (! $isHost && $meeting->hasPasscode()) {
-            $passcode = $request->validated('passcode');
-            if (empty($passcode) || ! $meeting->verifyPasscode($passcode)) {
-                return $this->errorResponse('Invalid or missing meeting passcode', 403);
-            }
-        }
-
-        // Capacity check (allow existing active participant to re-join/reconnect)
         $existingActive = MeetingParticipant::where('meeting_id', $meeting->id)
             ->where('user_id', $user->id)
             ->whereNull('left_at')
             ->first();
-
-        if (! $existingActive && $meeting->activeParticipants()->count() >= $meeting->max_participants) {
-            return $this->errorResponse('Meeting has reached maximum participant limit', 422);
-        }
 
         $role = $isHost ? 'host' : 'participant';
 
@@ -543,7 +590,7 @@ class MeetingController extends Controller
             ]
         );
 
-        return $this->successResponse([
+        $responseData = [
             'token' => $token,
             'livekit_token' => $token,
             'room_name' => $meeting->room_name,
@@ -554,7 +601,13 @@ class MeetingController extends Controller
             'role' => $role,
             'is_host' => $isHost,
             'livekit_url' => $this->liveKitService->getHost(),
-        ], 'Joined meeting successfully');
+        ];
+
+        if ($isHost && $hostSession) {
+            $responseData['host_session_token'] = $hostSession->session_token;
+        }
+
+        return $this->successResponse($responseData, 'Joined meeting successfully');
     }
 
     /**
@@ -572,6 +625,23 @@ class MeetingController extends Controller
 
         if ($user->isGuest() || $meeting->host_id !== $user->id) {
             return $this->errorResponse('Only the host can end this meeting', 403);
+        }
+
+        $hostSession = MeetingHostSession::where('user_id', $user->id)->first();
+        if ($hostSession) {
+            $token = $request->input('host_session_token');
+            if (empty($token)) {
+                return $this->errorResponse('Host session token is required to end meeting', 422, [
+                    'code' => 'HOST_SESSION_TOKEN_REQUIRED',
+                ]);
+            }
+
+            $released = $this->hostSessionService->releaseHostLock($user, $meeting, $token);
+            if (! $released) {
+                return $this->errorResponse('Invalid or expired host session token', 403, [
+                    'code' => 'HOST_SESSION_INVALID',
+                ]);
+            }
         }
 
         $meeting->update([
@@ -612,6 +682,23 @@ class MeetingController extends Controller
 
         // If host leaves, automatically end meeting for everyone and delete SFU room
         if (! $user->isGuest() && $meeting->host_id === $user->id) {
+            $hostSession = MeetingHostSession::where('user_id', $user->id)->first();
+            if ($hostSession) {
+                $token = $request->input('host_session_token');
+                if (empty($token)) {
+                    return $this->errorResponse('Host session token is required to leave as host', 422, [
+                        'code' => 'HOST_SESSION_TOKEN_REQUIRED',
+                    ]);
+                }
+
+                $released = $this->hostSessionService->releaseHostLock($user, $meeting, $token);
+                if (! $released) {
+                    return $this->errorResponse('Invalid or expired host session token', 403, [
+                        'code' => 'HOST_SESSION_INVALID',
+                    ]);
+                }
+            }
+
             $meeting->update([
                 'is_active' => false,
                 'is_host_online' => false,
@@ -632,6 +719,46 @@ class MeetingController extends Controller
         }
 
         return $this->successResponse(null, 'Left meeting successfully');
+    }
+
+    /**
+     * Extend host session lease via heartbeat.
+     */
+    public function heartbeat(Request $request, string $meetingCode): JsonResponse
+    {
+        $meeting = $this->findMeetingByCode($meetingCode);
+
+        if (! $meeting) {
+            return $this->errorResponse('Meeting not found', 404);
+        }
+
+        $user = $request->user();
+
+        if ($user->isGuest() || $meeting->host_id !== $user->id) {
+            return $this->errorResponse('Only the meeting host can send heartbeats', 403);
+        }
+
+        $token = $request->input('host_session_token');
+        if (empty($token)) {
+            return $this->errorResponse('Host session token is required', 422, [
+                'code' => 'HOST_SESSION_TOKEN_REQUIRED',
+            ]);
+        }
+
+        try {
+            $session = $this->hostSessionService->heartbeat($user, $meeting, $token);
+
+            return $this->successResponse([
+                'expires_at' => $session->expires_at->toISOString(),
+                'last_seen_at' => $session->last_seen_at->toISOString(),
+            ], 'Host heartbeat acknowledged');
+        } catch (HostSessionInvalidException $e) {
+            return response()->json([
+                'success' => false,
+                'code' => 'HOST_SESSION_INVALID',
+                'message' => $e->getMessage(),
+            ], 403);
+        }
     }
 
     /**
