@@ -115,6 +115,7 @@ class AuthTest extends TestCase
                 'data' => [
                     'user' => [
                         'name' => 'Guest Observer',
+                        'role' => 'guest',
                         'is_guest' => true,
                         'avatar_url' => 'https://example.com/avatar.png',
                     ],
@@ -123,6 +124,7 @@ class AuthTest extends TestCase
 
         $this->assertDatabaseHas('users', [
             'name' => 'Guest Observer',
+            'role' => 'guest',
             'is_guest' => true,
         ]);
     }

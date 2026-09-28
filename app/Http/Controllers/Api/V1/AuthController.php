@@ -25,6 +25,7 @@ class AuthController extends Controller
             'name' => $validated['name'],
             'email' => $validated['email'],
             'password' => $validated['password'],
+            'role' => 'host',
             'is_guest' => false,
         ]);
 
@@ -109,7 +110,10 @@ class AuthController extends Controller
         $guestUser = null;
         if (! empty($deviceId)) {
             $guestUser = User::where('username', "guest_{$deviceId}")
-                ->where('is_guest', true)
+                ->where(function ($q) {
+                    $q->where('is_guest', true)
+                        ->orWhere('role', 'guest');
+                })
                 ->first();
         }
 
@@ -117,12 +121,15 @@ class AuthController extends Controller
             $guestUser->update([
                 'name' => $validated['name'],
                 'avatar_url' => $validated['avatar_url'] ?? $guestUser->avatar_url,
+                'role' => 'guest',
+                'is_guest' => true,
             ]);
         } else {
             $guestUser = User::create([
                 'name' => $validated['name'],
                 'username' => ! empty($deviceId) ? "guest_{$deviceId}" : null,
                 'avatar_url' => $validated['avatar_url'] ?? null,
+                'role' => 'guest',
                 'is_guest' => true,
             ]);
         }

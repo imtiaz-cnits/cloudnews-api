@@ -13,12 +13,12 @@ class DashboardController extends Controller
      */
     public function index(): View
     {
-        $totalHosts = User::where('role', 'host')->count();
-        $totalGuests = User::where('is_guest', true)->orWhere('role', 'guest')->count();
+        $totalHosts = User::hosts()->count();
+        $totalGuests = User::guests()->count();
         $activeMeetings = Meeting::where('is_active', true)->count();
         $totalMeetings = Meeting::count();
 
-        $recentHosts = User::where('role', 'host')
+        $recentHosts = User::hosts()
             ->latest()
             ->take(5)
             ->get();

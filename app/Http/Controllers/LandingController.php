@@ -14,7 +14,7 @@ class LandingController extends Controller
     public function index(): View
     {
         $activeMeetingsCount = Meeting::where('is_active', true)->count();
-        $totalHostsCount = User::where('role', 'host')->count();
+        $totalHostsCount = User::hosts()->count();
 
         return view('landing', [
             'activeMeetingsCount' => $activeMeetingsCount,

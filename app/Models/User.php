@@ -72,7 +72,11 @@ class User extends Authenticatable
      */
     public function isHost(): bool
     {
-        return in_array($this->role, ['host', 'admin'], true) || (! (bool) $this->is_guest && $this->role !== 'guest');
+        if ((bool) $this->is_guest || $this->role === 'guest' || str_starts_with((string) $this->username, 'guest_')) {
+            return false;
+        }
+
+        return in_array($this->role, ['host', 'admin'], true);
     }
 
     /**
@@ -80,11 +84,36 @@ class User extends Authenticatable
      */
     public function isGuest(): bool
     {
-        if (in_array($this->role, ['host', 'admin'], true)) {
+        if (in_array($this->role, ['host', 'admin'], true) && ! (bool) $this->is_guest && ! str_starts_with((string) $this->username, 'guest_')) {
             return false;
         }
 
-        return $this->role === 'guest' || (bool) $this->is_guest;
+        return (bool) $this->is_guest || $this->role === 'guest' || str_starts_with((string) $this->username, 'guest_');
+    }
+
+    /**
+     * Scope query to only registered host users (strictly excluding guests).
+     */
+    public function scopeHosts($query)
+    {
+        return $query->where('role', 'host')
+            ->where('is_guest', false)
+            ->where(function ($q) {
+                $q->whereNull('username')
+                    ->orWhere('username', 'not like', 'guest_%');
+            });
+    }
+
+    /**
+     * Scope query to guest users.
+     */
+    public function scopeGuests($query)
+    {
+        return $query->where(function ($q) {
+            $q->where('is_guest', true)
+                ->orWhere('role', 'guest')
+                ->orWhere('username', 'like', 'guest_%');
+        });
     }
 
     /**

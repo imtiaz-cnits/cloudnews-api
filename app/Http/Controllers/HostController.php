@@ -21,7 +21,7 @@ class HostController extends Controller
     {
         $search = trim((string) $request->query('search', ''));
 
-        $hosts = User::where('role', 'host')
+        $hosts = User::hosts()
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($sub) use ($search) {
                     $sub->where('name', 'like', "%{$search}%")
