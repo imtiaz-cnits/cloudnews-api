@@ -13,9 +13,9 @@ use Illuminate\Support\Str;
 class HostSessionService
 {
     /**
-     * Default lease duration in seconds (60 seconds).
+     * Default lease duration in seconds (90 seconds).
      */
-    public const DEFAULT_LEASE_SECONDS = 60;
+    public const DEFAULT_LEASE_SECONDS = 90;
 
     /**
      * Acquire a host session lock for the given user and meeting.

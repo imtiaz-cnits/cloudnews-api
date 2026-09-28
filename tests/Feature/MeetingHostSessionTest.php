@@ -413,4 +413,115 @@ class MeetingHostSessionTest extends TestCase
         $this->assertEquals($initialMeetingCount, Meeting::count());
         $this->assertDatabaseMissing('meetings', ['title' => 'Should Rollback Meeting']);
     }
+
+    public function test_reacquire_host_session_after_lease_expired_succeeds(): void
+    {
+        $host = User::factory()->create(['role' => 'host', 'is_guest' => false]);
+
+        $createResponse = $this->actingAs($host)->postJson('/api/v1/meetings', [
+            'title' => 'Background Recovery Test',
+        ]);
+        $createResponse->assertStatus(201);
+        $meetingCode = $createResponse->json('data.meeting_code');
+        $oldToken = $createResponse->json('data.host_session_token');
+
+        // Simulate app backgrounded for > 90s: lease expired in DB
+        $session = MeetingHostSession::where('user_id', $host->id)->first();
+        $session->update([
+            'expires_at' => now()->subSeconds(30),
+            'last_seen_at' => now()->subMinutes(2),
+        ]);
+
+        // Heartbeat should fail because lease expired
+        $heartbeatRes = $this->actingAs($host)->postJson("/api/v1/meetings/{$meetingCode}/host/heartbeat", [
+            'host_session_token' => $oldToken,
+        ]);
+        $heartbeatRes->assertStatus(403)
+            ->assertJson(['code' => 'HOST_SESSION_INVALID']);
+
+        // Controlled reacquire endpoint recovers the host session
+        $reacquireRes = $this->actingAs($host)->postJson("/api/v1/meetings/{$meetingCode}/host/reacquire", [
+            'host_session_token' => $oldToken,
+        ]);
+
+        $reacquireRes->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'message' => 'Host session re-acquired successfully',
+            ]);
+
+        $newToken = $reacquireRes->json('data.host_session_token');
+        $this->assertNotEmpty($newToken);
+
+        // New token can now send heartbeats successfully
+        $freshHeartbeat = $this->actingAs($host)->postJson("/api/v1/meetings/{$meetingCode}/host/heartbeat", [
+            'host_session_token' => $newToken,
+        ]);
+        $freshHeartbeat->assertStatus(200);
+    }
+
+    public function test_reacquire_by_non_host_is_rejected(): void
+    {
+        $host = User::factory()->create(['role' => 'host', 'is_guest' => false]);
+        $otherUser = User::factory()->create(['role' => 'host', 'is_guest' => false]);
+
+        $createResponse = $this->actingAs($host)->postJson('/api/v1/meetings', [
+            'title' => 'Security Test',
+        ]);
+        $meetingCode = $createResponse->json('data.meeting_code');
+
+        $reacquireRes = $this->actingAs($otherUser)->postJson("/api/v1/meetings/{$meetingCode}/host/reacquire");
+        $reacquireRes->assertStatus(403);
+    }
+
+    public function test_reacquire_on_ended_meeting_is_rejected(): void
+    {
+        $host = User::factory()->create(['role' => 'host', 'is_guest' => false]);
+
+        $createResponse = $this->actingAs($host)->postJson('/api/v1/meetings', [
+            'title' => 'Ended Meeting Test',
+        ]);
+        $meetingCode = $createResponse->json('data.meeting_code');
+        $token = $createResponse->json('data.host_session_token');
+
+        // End meeting
+        $this->actingAs($host)->postJson("/api/v1/meetings/{$meetingCode}/end", [
+            'host_session_token' => $token,
+        ])->assertStatus(200);
+
+        // Attempt to reacquire on ended meeting -> rejected with 410
+        $reacquireRes = $this->actingAs($host)->postJson("/api/v1/meetings/{$meetingCode}/host/reacquire", [
+            'host_session_token' => $token,
+        ]);
+        $reacquireRes->assertStatus(410)
+            ->assertJson(['code' => 'MEETING_ENDED']);
+    }
+
+    public function test_reacquire_when_host_is_active_in_another_meeting_is_rejected(): void
+    {
+        $host = User::factory()->create(['role' => 'host', 'is_guest' => false]);
+
+        // Host creates meeting 1
+        $create1 = $this->actingAs($host)->postJson('/api/v1/meetings', [
+            'title' => 'Meeting 1',
+        ]);
+        $create1->assertStatus(201);
+
+        // Admin/system creates meeting 2 for the same host
+        $meeting2 = Meeting::create([
+            'host_id' => $host->id,
+            'room_name' => 'room-meeting-2',
+            'meeting_code' => '999-888',
+            'title' => 'Meeting 2',
+            'is_active' => true,
+            'is_locked' => false,
+            'max_participants' => 10,
+        ]);
+
+        // Attempting to reacquire host on meeting 2 while meeting 1 is active -> 409
+        $reacquireRes = $this->actingAs($host)->postJson("/api/v1/meetings/{$meeting2->meeting_code}/host/reacquire");
+        $reacquireRes->assertStatus(409)
+            ->assertJson(['code' => 'HOST_ALREADY_IN_MEETING']);
+    }
 }
+

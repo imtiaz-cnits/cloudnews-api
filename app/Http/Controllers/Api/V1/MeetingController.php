@@ -762,6 +762,60 @@ class MeetingController extends Controller
     }
 
     /**
+     * Controlled Host Session Re-acquisition after background/PiP recovery or lease expiration.
+     */
+    public function reacquireHostSession(Request $request, string $meetingCode): JsonResponse
+    {
+        $meeting = $this->findMeetingByCode($meetingCode);
+
+        if (! $meeting) {
+            return $this->errorResponse('Meeting not found', 404);
+        }
+
+        $user = $request->user();
+
+        // Must be the actual host of this meeting and not a guest
+        if ($user->isGuest() || $meeting->host_id !== $user->id) {
+            return $this->errorResponse('Only the meeting host can re-acquire host sessions', 403);
+        }
+
+        // Meeting must still be active and not ended
+        if (! $meeting->is_active || $meeting->ended_at !== null) {
+            return response()->json([
+                'success' => false,
+                'code' => 'MEETING_ENDED',
+                'message' => 'This meeting has already ended.',
+            ], 410);
+        }
+
+        $token = $request->input('host_session_token');
+
+        try {
+            $session = $this->hostSessionService->acquireHostLock($user, $meeting, $token);
+
+            $meeting->update([
+                'is_active' => true,
+                'is_host_online' => true,
+            ]);
+
+            return $this->successResponse([
+                'host_session_token' => $session->session_token,
+                'expires_at' => $session->expires_at->toISOString(),
+                'last_seen_at' => $session->last_seen_at->toISOString(),
+            ], 'Host session re-acquired successfully');
+        } catch (HostAlreadyInMeetingException $e) {
+            return response()->json([
+                'success' => false,
+                'code' => 'HOST_ALREADY_IN_MEETING',
+                'message' => $e->getMessage(),
+                'data' => [
+                    'active_meeting_code' => $e->getActiveMeetingCode(),
+                ],
+            ], 409);
+        }
+    }
+
+    /**
      * Remove a participant from the meeting (Host only).
      */
     public function removeParticipant(Request $request, string $meetingCode): JsonResponse
