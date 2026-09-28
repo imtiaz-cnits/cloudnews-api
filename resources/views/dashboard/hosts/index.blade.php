@@ -47,6 +47,7 @@
                     <tr class="bg-slate-900/80 border-b border-slate-800 text-slate-400 uppercase tracking-wider text-[11px]">
                         <th class="py-4 px-6 font-semibold">Host Profile</th>
                         <th class="py-4 px-6 font-semibold">Username</th>
+                        <th class="py-4 px-6 font-semibold">Device Session</th>
                         <th class="py-4 px-6 font-semibold">Meetings Hosted</th>
                         <th class="py-4 px-6 font-semibold">Provisioned</th>
                         <th class="py-4 px-6 font-semibold text-right">Actions</th>
@@ -79,6 +80,21 @@
                             @endif
                         </td>
 
+                        <!-- Device Session -->
+                        <td class="py-4 px-6">
+                            @if($host->tokens_count > 0)
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 font-semibold border border-emerald-500/20 text-[11px]" title="Active authenticated session present">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                Active Session
+                            </span>
+                            @else
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-800/80 text-slate-400 border border-slate-700/60 text-[11px]" title="No active device logged in">
+                                <span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                                No Session
+                            </span>
+                            @endif
+                        </td>
+
                         <!-- Meetings Hosted -->
                         <td class="py-4 px-6 text-slate-300">
                             <span class="px-2.5 py-1 rounded-full bg-sky-500/10 text-sky-400 font-bold border border-sky-500/20 text-[11px]">
@@ -97,6 +113,26 @@
                         <!-- Action Buttons -->
                         <td class="py-4 px-6 text-right">
                             <div class="flex items-center justify-end gap-2">
+                                <!-- Revoke Session Action -->
+                                @if($host->tokens_count > 0)
+                                <form method="POST" action="{{ route('dashboard.hosts.revoke-session', $host->id) }}"
+                                    onsubmit="return confirm('Revoke active session? This will sign out this user from their currently active device. They will need to sign in again.');"
+                                    class="inline">
+                                    @csrf
+                                    <button type="submit"
+                                        class="px-2.5 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/20 text-[11px] font-medium transition"
+                                        title="Sign out this user from their currently active device">
+                                        Revoke Session
+                                    </button>
+                                </form>
+                                @else
+                                <button type="button" disabled
+                                    class="px-2.5 py-1.5 rounded-lg bg-slate-800/40 text-slate-600 border border-slate-800 text-[11px] font-medium cursor-not-allowed"
+                                    title="No active session to revoke">
+                                    Revoke Session
+                                </button>
+                                @endif
+
                                 <!-- Reset Password Action -->
                                 <button type="button"
                                     onclick="openResetModal('{{ $host->id }}', '{{ addslashes($host->name) }}', '{{ addslashes($host->email) }}')"
@@ -128,7 +164,7 @@
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="5" class="py-12 text-center text-slate-500">
+                        <td colspan="6" class="py-12 text-center text-slate-500">
                             <div class="w-12 h-12 rounded-2xl bg-slate-800/80 flex items-center justify-center mx-auto text-slate-400 mb-3">
                                 <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />

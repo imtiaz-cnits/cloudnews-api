@@ -123,4 +123,116 @@ class HostUserManagementTest extends TestCase
         $this->assertTrue($user->isGuest());
         $this->assertFalse($user->isHost());
     }
+
+    public function test_authorized_admin_can_revoke_host_session(): void
+    {
+        $admin = User::factory()->create([
+            'role' => 'admin',
+            'is_guest' => false,
+        ]);
+
+        $host = User::factory()->create([
+            'role' => 'host',
+            'is_guest' => false,
+        ]);
+
+        $otherHost = User::factory()->create([
+            'role' => 'host',
+            'is_guest' => false,
+        ]);
+
+        // Issue tokens
+        $host->createToken('device_a');
+        $host->createToken('device_b');
+        $otherHost->createToken('other_device');
+
+        $this->assertEquals(2, $host->tokens()->count());
+        $this->assertEquals(1, $otherHost->tokens()->count());
+
+        $this->actingAs($admin);
+
+        $response = $this->post(route('dashboard.hosts.revoke-session', $host));
+        $response->assertRedirect(route('dashboard.hosts.index'))
+            ->assertSessionHas('success');
+
+        // Host tokens revoked, other host tokens intact
+        $this->assertEquals(0, $host->tokens()->count());
+        $this->assertEquals(1, $otherHost->tokens()->count());
+    }
+
+    public function test_unauthorized_user_cannot_revoke_session(): void
+    {
+        $host = User::factory()->create([
+            'role' => 'host',
+            'is_guest' => false,
+        ]);
+        $host->createToken('device_a');
+
+        // Unauthenticated request
+        $response = $this->post(route('dashboard.hosts.revoke-session', $host));
+        $response->assertRedirect(route('login'));
+        $this->assertEquals(1, $host->tokens()->count());
+
+        // Regular non-admin host acting
+        $nonAdmin = User::factory()->create([
+            'role' => 'host',
+            'is_guest' => false,
+        ]);
+        $response = $this->actingAs($nonAdmin)->post(route('dashboard.hosts.revoke-session', $host));
+        $response->assertRedirect(route('login'))
+            ->assertSessionHas('error');
+        $this->assertEquals(1, $host->tokens()->count());
+    }
+
+    public function test_after_admin_revokes_session_user_can_login_again(): void
+    {
+        $admin = User::factory()->create([
+            'role' => 'admin',
+            'is_guest' => false,
+        ]);
+
+        $host = User::factory()->create([
+            'email' => 'host_lock@example.com',
+            'password' => 'Password123!',
+            'role' => 'host',
+            'is_guest' => false,
+        ]);
+
+        // Device A logs in
+        $login1 = $this->postJson('/api/v1/auth/login', [
+            'login' => 'host_lock@example.com',
+            'password' => 'Password123!',
+        ]);
+        $login1->assertStatus(200);
+
+        // Device B tries to log in, rejected with 409
+        $login2 = $this->postJson('/api/v1/auth/login', [
+            'login' => 'host_lock@example.com',
+            'password' => 'Password123!',
+        ]);
+        $login2->assertStatus(409)
+            ->assertJson([
+                'error_code' => 'ACTIVE_SESSION_EXISTS',
+            ]);
+
+        // Admin revokes session from dashboard
+        $this->actingAs($admin);
+        $revokeResponse = $this->post(route('dashboard.hosts.revoke-session', $host));
+        $revokeResponse->assertRedirect(route('dashboard.hosts.index'));
+        $this->assertEquals(0, $host->tokens()->count());
+
+        // Device B can now log in successfully
+        \Illuminate\Support\Facades\Auth::forgetGuards();
+        $login3 = $this->postJson('/api/v1/auth/login', [
+            'login' => 'host_lock@example.com',
+            'password' => 'Password123!',
+        ]);
+        $login3->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'message' => 'Login successful',
+            ]);
+        $this->assertNotEmpty($login3->json('data.token'));
+        $this->assertEquals(1, $host->tokens()->count());
+    }
 }

@@ -29,7 +29,7 @@ class HostController extends Controller
                         ->orWhere('username', 'like', "%{$search}%");
                 });
             })
-            ->withCount('hostedMeetings')
+            ->withCount(['hostedMeetings', 'tokens'])
             ->latest()
             ->paginate(10)
             ->withQueryString();
@@ -185,5 +185,21 @@ class HostController extends Controller
 
         return redirect()->route('dashboard.hosts.index')
             ->with('success', "Password for {$host->name} ({$host->email}) has been reset to: {$newPassword}");
+    }
+
+    /**
+     * Revoke all active personal access tokens for the specified host.
+     */
+    public function revokeSession(User $host): RedirectResponse
+    {
+        if ($host->role === 'admin') {
+            return redirect()->route('dashboard.hosts.index')
+                ->with('error', 'Administrator sessions cannot be revoked via this action.');
+        }
+
+        $host->tokens()->delete();
+
+        return redirect()->route('dashboard.hosts.index')
+            ->with('success', "Active session for host '{$host->name}' has been revoked successfully. The user may now sign in on their new device.");
     }
 }

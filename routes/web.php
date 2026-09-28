@@ -29,4 +29,5 @@ Route::middleware(['auth', 'admin'])->prefix('dashboard')->name('dashboard.')->g
     // Host Management CRUD
     Route::resource('hosts', HostController::class)->except(['show']);
     Route::post('hosts/{host}/reset-password', [HostController::class, 'resetPassword'])->name('hosts.reset-password');
+    Route::post('hosts/{host}/revoke-session', [HostController::class, 'revokeSession'])->name('hosts.revoke-session');
 });
