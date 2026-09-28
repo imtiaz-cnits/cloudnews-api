@@ -65,9 +65,28 @@ class AuthController extends Controller
                 $lockedUser->save();
             }
 
-            // Enforce ONE USER ACCOUNT = ONE ACTIVE AUTHENTICATED DEVICE SESSION.
-            // Invalidate all previous device sessions/tokens for this account atomically.
-            $lockedUser->tokens()->delete();
+            // Prune expired/stale tokens according to Sanctum configuration and expires_at
+            $expiration = config('sanctum.expiration');
+            if ($expiration) {
+                $lockedUser->tokens()
+                    ->where('created_at', '<=', now()->subMinutes($expiration))
+                    ->delete();
+            }
+            $lockedUser->tokens()
+                ->whereNotNull('expires_at')
+                ->where('expires_at', '<=', now())
+                ->delete();
+
+            // STRICT SINGLE-DEVICE LOGIN:
+            // If an active session already exists for this account, reject second login with 409.
+            // First device remains active and undisturbed.
+            if ($lockedUser->tokens()->exists()) {
+                return response()->json([
+                    'success' => false,
+                    'error_code' => 'ACTIVE_SESSION_EXISTS',
+                    'message' => 'This account is already signed in on another device. Please log out from that device first.',
+                ], 409);
+            }
 
             // Create exactly one new auth token for the current device session.
             $token = $lockedUser->createToken('auth_token')->plainTextToken;
