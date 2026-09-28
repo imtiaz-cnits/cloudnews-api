@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Meeting;
 use App\Models\User;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -201,5 +202,75 @@ class HostController extends Controller
 
         return redirect()->route('dashboard.hosts.index')
             ->with('success', "Active session for host '{$host->name}' has been revoked successfully. The user may now sign in on their new device.");
+    }
+
+    /**
+     * Handle bulk actions (revoke sessions, delete) on selected hosts.
+     */
+    public function bulkAction(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'action' => ['required', 'string', 'in:revoke_sessions,delete'],
+            'selected_ids' => ['required', 'array', 'min:1'],
+            'selected_ids.*' => ['integer', 'exists:users,id'],
+        ]);
+
+        $ids = $validated['selected_ids'];
+        $action = $validated['action'];
+
+        // Strictly protect current admin user and any admin accounts from bulk deletion/revocation
+        $targetHosts = User::whereIn('id', $ids)
+            ->where('role', '!=', 'admin')
+            ->where('id', '!=', Auth::id())
+            ->get();
+
+        $count = $targetHosts->count();
+
+        if ($count === 0) {
+            return redirect()->route('dashboard.hosts.index')
+                ->with('error', 'No eligible host accounts selected.');
+        }
+
+        $validIds = $targetHosts->pluck('id')->toArray();
+
+        if ($action === 'revoke_sessions') {
+            DB::table('personal_access_tokens')
+                ->where('tokenable_type', User::class)
+                ->whereIn('tokenable_id', $validIds)
+                ->delete();
+
+            return redirect()->route('dashboard.hosts.index')
+                ->with('success', "Active session(s) revoked for {$count} host(s) successfully.");
+        }
+
+        if ($action === 'delete') {
+            DB::transaction(function () use ($validIds) {
+                // Delete personal access tokens
+                DB::table('personal_access_tokens')
+                    ->where('tokenable_type', User::class)
+                    ->whereIn('tokenable_id', $validIds)
+                    ->delete();
+
+                // Delete participant records
+                DB::table('meeting_participants')->whereIn('user_id', $validIds)->delete();
+
+                // Delete meetings hosted by these users
+                $meetingIds = Meeting::whereIn('host_id', $validIds)->pluck('id');
+                if ($meetingIds->isNotEmpty()) {
+                    DB::table('meeting_participants')->whereIn('meeting_id', $meetingIds)->delete();
+                    DB::table('meeting_messages')->whereIn('meeting_id', $meetingIds)->delete();
+                    DB::table('meeting_host_sessions')->whereIn('meeting_id', $meetingIds)->delete();
+                    Meeting::whereIn('id', $meetingIds)->delete();
+                }
+
+                // Delete users
+                User::whereIn('id', $validIds)->delete();
+            });
+
+            return redirect()->route('dashboard.hosts.index')
+                ->with('success', "Successfully deleted {$count} host(s) and their associated records.");
+        }
+
+        return redirect()->route('dashboard.hosts.index');
     }
 }

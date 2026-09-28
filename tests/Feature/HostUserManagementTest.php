@@ -235,4 +235,52 @@ class HostUserManagementTest extends TestCase
         $this->assertNotEmpty($login3->json('data.token'));
         $this->assertEquals(1, $host->tokens()->count());
     }
+
+    public function test_admin_can_bulk_revoke_host_sessions(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'is_guest' => false]);
+
+        $host1 = User::factory()->create(['role' => 'host', 'is_guest' => false]);
+        $host2 = User::factory()->create(['role' => 'host', 'is_guest' => false]);
+
+        $host1->createToken('dev_1');
+        $host2->createToken('dev_2');
+
+        $this->assertEquals(1, $host1->tokens()->count());
+        $this->assertEquals(1, $host2->tokens()->count());
+
+        $this->actingAs($admin);
+
+        $response = $this->post(route('dashboard.hosts.bulk-action'), [
+            'action' => 'revoke_sessions',
+            'selected_ids' => [$host1->id, $host2->id],
+        ]);
+
+        $response->assertRedirect(route('dashboard.hosts.index'))
+            ->assertSessionHas('success');
+
+        $this->assertEquals(0, $host1->tokens()->count());
+        $this->assertEquals(0, $host2->tokens()->count());
+    }
+
+    public function test_admin_can_bulk_delete_hosts(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'is_guest' => false]);
+
+        $host1 = User::factory()->create(['role' => 'host', 'is_guest' => false]);
+        $host2 = User::factory()->create(['role' => 'host', 'is_guest' => false]);
+
+        $this->actingAs($admin);
+
+        $response = $this->post(route('dashboard.hosts.bulk-action'), [
+            'action' => 'delete',
+            'selected_ids' => [$host1->id, $host2->id],
+        ]);
+
+        $response->assertRedirect(route('dashboard.hosts.index'))
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseMissing('users', ['id' => $host1->id]);
+        $this->assertDatabaseMissing('users', ['id' => $host2->id]);
+    }
 }

@@ -39,12 +39,59 @@
         </a>
     </div>
 
+    <!-- Floating / Sticky Bulk Action Toolbar -->
+    <div id="bulkHostBar" class="hidden p-3.5 rounded-2xl bg-sky-950/80 border border-sky-500/40 backdrop-blur-md flex flex-wrap items-center justify-between gap-3 shadow-xl shadow-sky-950/50 transition-all">
+        <div class="flex items-center gap-3">
+            <span id="selectedHostCount" class="px-2.5 py-1 rounded-full bg-sky-500/20 text-sky-300 font-bold text-xs border border-sky-500/30">
+                0 hosts selected
+            </span>
+            <span class="text-xs text-slate-300 font-medium">Bulk Host Management Actions</span>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <!-- Bulk Revoke Sessions Action -->
+            <button type="button" onclick="submitBulkHostAction('revoke_sessions')"
+                class="px-3.5 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 text-xs font-semibold transition flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                Revoke Sessions
+            </button>
+
+            <!-- Bulk Delete Action -->
+            <button type="button" onclick="submitBulkHostAction('delete')"
+                class="px-3.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 text-xs font-semibold transition flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                Delete Selected
+            </button>
+
+            <!-- Deselect All -->
+            <button type="button" onclick="clearHostSelection()"
+                class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white text-xs font-medium transition">
+                Deselect All
+            </button>
+        </div>
+    </div>
+
+    <!-- Hidden Bulk Action Submission Form -->
+    <form id="bulkHostForm" method="POST" action="{{ route('dashboard.hosts.bulk-action') }}" class="hidden">
+        @csrf
+        <input type="hidden" name="action" id="bulkHostActionInput">
+        <div id="bulkHostIdsContainer"></div>
+    </form>
+
     <!-- Hosts Table -->
     <div class="glass-panel rounded-2xl border border-brand-border overflow-hidden">
         <div class="overflow-x-auto">
             <table class="w-full text-left text-xs">
                 <thead>
                     <tr class="bg-slate-900/80 border-b border-slate-800 text-slate-400 uppercase tracking-wider text-[11px]">
+                        <th class="py-4 px-4 w-10 text-center">
+                            <input type="checkbox" id="selectAllHosts"
+                                class="w-4 h-4 rounded bg-slate-900 border-slate-700 text-sky-500 focus:ring-sky-500 focus:ring-offset-slate-900 cursor-pointer">
+                        </th>
                         <th class="py-4 px-6 font-semibold">Host Profile</th>
                         <th class="py-4 px-6 font-semibold">Username</th>
                         <th class="py-4 px-6 font-semibold">Device Session</th>
@@ -56,6 +103,12 @@
                 <tbody class="divide-y divide-slate-800/60">
                     @forelse($hosts as $host)
                     <tr class="hover:bg-slate-800/30 transition">
+                        <!-- Checkbox -->
+                        <td class="py-4 px-4 text-center">
+                            <input type="checkbox" value="{{ $host->id }}"
+                                class="host-checkbox w-4 h-4 rounded bg-slate-900 border-slate-700 text-sky-500 focus:ring-sky-500 focus:ring-offset-slate-900 cursor-pointer">
+                        </td>
+
                         <!-- Host Name & Email -->
                         <td class="py-4 px-6">
                             <div class="flex items-center gap-3">
@@ -164,7 +217,7 @@
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="6" class="py-12 text-center text-slate-500">
+                        <td colspan="7" class="py-12 text-center text-slate-500">
                             <div class="w-12 h-12 rounded-2xl bg-slate-800/80 flex items-center justify-center mx-auto text-slate-400 mb-3">
                                 <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
@@ -253,6 +306,77 @@
         const modal = document.getElementById('resetPasswordModal');
         modal.classList.add('hidden');
         modal.classList.remove('flex');
+    }
+
+    // Multi-Selection Logic for Hosts
+    const selectAllHosts = document.getElementById('selectAllHosts');
+    const hostCheckboxes = document.querySelectorAll('.host-checkbox');
+    const bulkHostBar = document.getElementById('bulkHostBar');
+    const selectedHostCount = document.getElementById('selectedHostCount');
+    const bulkHostForm = document.getElementById('bulkHostForm');
+    const bulkHostActionInput = document.getElementById('bulkHostActionInput');
+    const bulkHostIdsContainer = document.getElementById('bulkHostIdsContainer');
+
+    function updateHostSelectionState() {
+        const selected = Array.from(hostCheckboxes).filter(cb => cb.checked);
+        const count = selected.length;
+
+        if (count > 0) {
+            bulkHostBar.classList.remove('hidden');
+            selectedHostCount.textContent = count + ' host' + (count > 1 ? 's' : '') + ' selected';
+        } else {
+            bulkHostBar.classList.add('hidden');
+        }
+
+        if (selectAllHosts) {
+            selectAllHosts.checked = (count > 0 && count === hostCheckboxes.length);
+            selectAllHosts.indeterminate = (count > 0 && count < hostCheckboxes.length);
+        }
+    }
+
+    if (selectAllHosts) {
+        selectAllHosts.addEventListener('change', function() {
+            hostCheckboxes.forEach(cb => {
+                cb.checked = selectAllHosts.checked;
+            });
+            updateHostSelectionState();
+        });
+    }
+
+    hostCheckboxes.forEach(cb => {
+        cb.addEventListener('change', updateHostSelectionState);
+    });
+
+    function clearHostSelection() {
+        if (selectAllHosts) selectAllHosts.checked = false;
+        hostCheckboxes.forEach(cb => cb.checked = false);
+        updateHostSelectionState();
+    }
+
+    function submitBulkHostAction(action) {
+        const selected = Array.from(hostCheckboxes).filter(cb => cb.checked).map(cb => cb.value);
+        if (selected.length === 0) return;
+
+        let confirmMsg = '';
+        if (action === 'revoke_sessions') {
+            confirmMsg = 'Revoke active device session(s) for ' + selected.length + ' selected host(s)? They will need to sign in again.';
+        } else if (action === 'delete') {
+            confirmMsg = 'Are you sure you want to permanently delete ' + selected.length + ' selected host(s)? All their hosted meetings will also be removed. This action cannot be undone.';
+        }
+
+        if (!confirm(confirmMsg)) return;
+
+        bulkHostActionInput.value = action;
+        bulkHostIdsContainer.innerHTML = '';
+        selected.forEach(id => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'selected_ids[]';
+            input.value = id;
+            bulkHostIdsContainer.appendChild(input);
+        });
+
+        bulkHostForm.submit();
     }
 </script>
 @endsection
